@@ -82,16 +82,18 @@ Claude Code will then have three tools:
 | `show` | Read the full message history of a session by UUID. Supports pagination. |
 | `status` | Check how many messages are indexed vs. pending. |
 
-**Example usage inside Claude Code:**
-```
-Search my past conversations for "SQLite WAL lock error"
-→ loomi-memory.search({ query: "SQLite WAL lock error", mode: "both", limit: 5 })
+### Usage with Gemini CLI
 
-Find sessions where I used Drizzle ORM and hit a TypeError
-→ loomi-memory.search({ query: ["Drizzle ORM", "TypeError"], mode: "vector", limit: 10 })
+To use Loomi's memory globally across all your Gemini CLI sessions, run the following command (replacing the path with your actual project path):
+
+```bash
+gemini mcp add loomi-memory "bash" "-c" "cd /home/jch/workspace/loomi && npm run mcp-server" --scope user
 ```
 
-Sessions are automatically tagged (tools used, languages, frameworks, errors) on close, so queries like `"TypeScript Next.js"` or `"bash read TypeError"` surface the right sessions even with fuzzy wording.
+Once added, you can ask Gemini CLI questions like:
+- *"Search my past conversations for React refactoring tips"*
+- *"What is the status of my episodic memory?"*
+- *"Show me the details of the session where we discussed graceful shutdown"*
 
 ## Stack
 

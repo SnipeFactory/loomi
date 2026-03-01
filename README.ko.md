@@ -40,7 +40,7 @@ npm run dev        # http://localhost:2000
 
 ## MCP 서버 (Claude Code 에피소딕 메모리)
 
-`.mcp.json`이 프로젝트 루트에 이미 포함되어 있다. Loomi 디렉토리에서 Claude Code를 실행하면 자동으로 MCP 서버가 등록된다:
+`.mcp.json`이 프로젝트 루트에 이미 포함되어 있다. Loomi 디렉 토리에서 Claude Code를 실행하면 자동으로 MCP 서버가 등록된다:
 
 ```json
 // .mcp.json (이미 포함됨)
@@ -71,7 +71,21 @@ Drizzle ORM 쓰다가 TypeError 났던 세션 찾아줘
 → loomi-memory.search({ query: ["Drizzle ORM", "TypeError"], mode: "vector", limit: 10 })
 ```
 
-세션 종료 시 도구·언어·프레임워크·에러가 자동 태깅되므로 `"TypeScript Next.js"` 나 `"bash read TypeError"` 같은 모호한 표현으로도 정확한 세션을 찾을 수 있다.
+### Gemini CLI에서 사용
+
+Gemini CLI의 모든 세션에서 Loomi의 메모리를 전역적으로 사용하려면 다음 명령어를 실행하세요 (경로는 실제 프로젝트 경로로 수정해야 합니다):
+
+```bash
+gemini mcp add loomi-memory "bash" "-c" "cd /home/jch/workspace/loomi && npm run mcp-server" --scope user
+```
+
+등록 후 Gemini CLI에게 다음과 같이 질문할 수 있습니다:
+- *"과거 대화에서 React 리팩토링 팁 찾아줘"*
+- *"에피소딕 메모리 인덱싱 상태가 어때?"*
+- *"graceful shutdown에 대해 논의했던 세션 상세 내용 보여줘"*
+
+세션 종료 시 도구·언어·프레임워크·에러가 자동 태깅되므로 `"TypeScript Next.js"` 나 `"bash read TypeError"` 같은 모호한 표 현으로도 정확한 세션을 찾을 수 있다.
+
 
 ## 기술 스택
 

@@ -87,7 +87,7 @@ function SessionSummary({ sessionId, sessionUuid }: { sessionId: number; session
         <FileText className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--muted-foreground))]" />
         <span className="flex-1 text-[11px] text-[hsl(var(--muted-foreground))]">
           {errorCode === "NO_API_KEY"
-            ? "OpenRouter API 키를 설정해주세요"
+            ? "Please set OpenRouter API key"
             : error || "No AI summary yet"}
         </span>
         {errorCode === "NO_API_KEY" ? (

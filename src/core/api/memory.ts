@@ -87,7 +87,7 @@ export async function indexMessagePair(
 
   // Skip messages that are noise — not worth indexing:
   //   • tool_result / tool_error outputs
-  //   • very short messages (< 5 chars) — greetings like "여", "헤이"
+  //   • very short messages (< 5 chars) — greetings like "hi", "hey"
   //   • Claude Code context-window summary injections
   const isNoise =
     !userText ||

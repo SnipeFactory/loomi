@@ -34,7 +34,7 @@ export async function GET() {
     {
       id: "claude-cli",
       name: "Claude Code (CLI)",
-      description: "Claude Code CLI 대화 로그가 저장되는 경로입니다.",
+      description: "Path where Claude Code CLI conversation logs are stored.",
       defaultPath: path.join(home, ".claude", "projects"),
       exists: fs.existsSync(path.join(home, ".claude", "projects")),
       icon: "terminal",
@@ -42,7 +42,7 @@ export async function GET() {
     {
       id: "gemini-cli",
       name: "Gemini CLI",
-      description: "Google Gemini CLI 대화 로그가 저장되는 경로입니다.",
+      description: "Path where Google Gemini CLI conversation logs are stored.",
       defaultPath: path.join(home, ".gemini", "tmp"),
       exists: fs.existsSync(path.join(home, ".gemini", "tmp")),
       icon: "terminal",

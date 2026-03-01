@@ -90,6 +90,15 @@ export async function restartWatcher() {
   await startWatcher();
 }
 
+export async function stopWatcher() {
+  if (watcher) {
+    await watcher.close();
+    watcher = null;
+  }
+  stopSessionEndDetector();
+  stopPollSync();
+}
+
 export function isWatching(): boolean {
   return watcher !== null;
 }

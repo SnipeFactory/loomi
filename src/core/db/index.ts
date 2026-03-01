@@ -7,15 +7,25 @@ import fs from "fs";
 
 const DB_PATH = path.resolve(process.cwd(), "data", "loomi.db");
 
+let _sqlite: InstanceType<typeof Database> | null = null;
+
 function createDb() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
-  const sqlite = new Database(DB_PATH);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-  sqliteVec.load(sqlite);
+  _sqlite = new Database(DB_PATH);
+  _sqlite.pragma("journal_mode = WAL");
+  _sqlite.pragma("foreign_keys = ON");
+  sqliteVec.load(_sqlite);
 
-  return drizzle(sqlite, { schema });
+  return drizzle(_sqlite, { schema });
+}
+
+export function closeDb() {
+  if (_sqlite && _sqlite.open) {
+    _sqlite.close();
+    _sqlite = null;
+    globalThis.__loomi_db__ = undefined;
+  }
 }
 
 declare global {

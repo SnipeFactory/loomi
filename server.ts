@@ -1,9 +1,10 @@
 import { createServer } from "http";
 import next from "next";
 import { runMigrations } from "@core/db/migrate";
-import { startWatcher } from "@core/engine/watcher";
+import { startWatcher, stopWatcher } from "@core/engine/watcher";
 import { getModuleRuntime } from "@core/modules/runtime";
 import { registerBuiltinAdapters, discoverExternalAdapters, autoRegisterAdapterPaths } from "@core/adapters";
+import { closeDb } from "@core/db";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
@@ -37,6 +38,17 @@ app.prepare().then(async () => {
   server.listen(port, () => {
     console.log(`[Loomi] Running on http://${hostname}:${port}`);
   });
+
+  const shutdown = async (signal: string) => {
+    console.log(`[Loomi] ${signal} received, shutting down...`);
+    server.close();
+    await stopWatcher();
+    closeDb();
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }).catch((err) => {
   console.error("[Loomi] Fatal startup error:", err);
   process.exit(1);

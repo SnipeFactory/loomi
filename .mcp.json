@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "loomi-memory": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp-server.ts"]
+    }
+  }
+}

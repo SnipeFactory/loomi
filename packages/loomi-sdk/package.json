@@ -1,0 +1,11 @@
+{
+  "name": "@loomi/sdk",
+  "version": "0.1.0",
+  "description": "Loomi Plugin SDK - types and utilities for building Loomi plugins",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "license": "MIT",
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

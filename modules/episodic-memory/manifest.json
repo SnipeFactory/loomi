@@ -1,0 +1,15 @@
+{
+  "id": "episodic-memory",
+  "name": "Episodic Memory",
+  "version": "1.0.0",
+  "description": "Semantic vector search over past conversations. Indexes message pairs with local embeddings (all-MiniLM-L6-v2) and provides hybrid search (vector + FTS5).",
+  "author": "Loomi",
+  "loomiVersion": "1.0.0",
+  "runtime": "server",
+  "serverEntry": "index.ts",
+  "hooks": ["onModuleInit", "onSessionEnd"],
+  "slots": [],
+  "permissions": ["db:read", "db:write"],
+  "isPremium": false,
+  "tier": "explorer"
+}

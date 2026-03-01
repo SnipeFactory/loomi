@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+dist/
+
+# Data (local DB, downloaded models — not for public repo)
+data/
+
+# Internal docs (planning, strategy — not for public repo)
+docs/
+
+# Claude Code local settings & memory
+.claude/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+
+# TypeScript
+*.tsbuildinfo

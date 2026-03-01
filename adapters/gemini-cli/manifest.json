@@ -1,0 +1,17 @@
+{
+  "id": "gemini-cli",
+  "name": "Gemini CLI",
+  "version": "1.0.0",
+  "provider": "google",
+  "description": "Collects Gemini CLI conversation logs (~/.gemini/tmp/*/chats/session-*.json).",
+  "filePatterns": ["**/chats/session-*.json"],
+  "defaultPaths": ["~/.gemini/tmp"],
+  "capabilities": {
+    "hasThinking": false,
+    "hasCacheTokens": false,
+    "hasToolUse": true,
+    "hasCodeBlocks": true,
+    "hasFileChanges": false,
+    "hasImageContent": false
+  }
+}

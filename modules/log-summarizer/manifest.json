@@ -1,0 +1,38 @@
+{
+  "id": "log-summarizer",
+  "name": "Session Summarizer",
+  "version": "1.0.0",
+  "description": "Generates AI-powered summaries and keywords for sessions on demand",
+  "author": "Loomi",
+  "loomiVersion": "1.0.0",
+  "runtime": "server",
+  "serverEntry": "index.ts",
+  "hooks": ["onModuleInit"],
+  "slots": [],
+  "permissions": ["db:read", "db:write", "network"],
+  "isPremium": false,
+  "settingsSchema": [
+    {
+      "key": "apiKey",
+      "type": "string",
+      "label": "OpenRouter API Key",
+      "default": ""
+    },
+    {
+      "key": "summaryModel",
+      "type": "select",
+      "label": "Summary Model",
+      "default": "openrouter/auto",
+      "options": [
+        { "label": "Auto Router (Free)", "value": "openrouter/auto" },
+        { "label": "StepFun Step 3.5 Flash (Free)", "value": "stepfun/step-3.5-flash:free" },
+        { "label": "Upstage Solar Pro 3 (Free)", "value": "upstage/solar-pro-3:free" },
+        { "label": "NVIDIA Nemotron 3 Nano 30B (Free)", "value": "nvidia/nemotron-3-nano-30b-a3b:free" },
+        { "label": "Arcee Trinity Large (Free)", "value": "arcee-ai/trinity-large-preview:free" },
+        { "label": "Arcee Trinity Mini (Free)", "value": "arcee-ai/trinity-mini:free" },
+        { "label": "LiquidAI LFM 1.2B Thinking (Free)", "value": "liquid/lfm-2.5-1.2b-thinking:free" }
+      ]
+    }
+  ],
+  "tier": "explorer"
+}

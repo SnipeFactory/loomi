@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { Wrench, Hash, FolderOpen } from "lucide-react";
+import { getToolStyle } from "../utils/tool-styles";
 
 interface ToolUsageRecord {
   toolName: string;
@@ -10,22 +11,6 @@ interface ToolUsageRecord {
 }
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-const TOOL_COLORS: Record<string, string> = {
-  Bash: "bg-emerald-500",
-  Read: "bg-blue-500",
-  Write: "bg-amber-500",
-  Edit: "bg-purple-500",
-  Glob: "bg-cyan-500",
-  Grep: "bg-orange-500",
-  Task: "bg-pink-500",
-  WebFetch: "bg-red-500",
-  WebSearch: "bg-indigo-500",
-};
-
-function getToolColor(name: string): string {
-  return TOOL_COLORS[name] || "bg-gray-500";
-}
 
 export function ToolMonitor({ sessionId }: { sessionId?: number | null }) {
   const url = sessionId
@@ -77,45 +62,52 @@ export function ToolMonitor({ sessionId }: { sessionId?: number | null }) {
 
       {/* Tool list */}
       <div className="divide-y divide-[hsl(var(--border))]">
-        {tools.map((tool) => (
-          <div key={tool.toolName} className="px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className={`h-2.5 w-2.5 rounded-full ${getToolColor(tool.toolName)}`} />
-                <span className="text-sm font-mono font-medium text-[hsl(var(--foreground))]">
-                  {tool.toolName}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-[10px] text-[hsl(var(--muted-foreground))]">
-                <span className="flex items-center gap-1">
-                  <Hash className="h-3 w-3" />
-                  {tool.usageCount.toLocaleString()} calls
-                </span>
-                {!isSessionView && (
-                  <span className="flex items-center gap-1">
-                    <FolderOpen className="h-3 w-3" />
-                    {tool.sessionCount} sessions
+        {tools.map((tool) => {
+          const style = getToolStyle(tool.toolName);
+          const Icon = style.icon;
+          
+          return (
+            <div key={tool.toolName} className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className={`flex h-5 w-5 items-center justify-center rounded ${style.color} bg-opacity-20`}>
+                    <Icon className={`h-3 w-3 ${style.color.replace("bg-", "text-")}`} />
+                  </div>
+                  <span className="text-sm font-mono font-medium text-[hsl(var(--foreground))]">
+                    {tool.toolName}
                   </span>
-                )}
+                </div>
+                <div className="flex items-center gap-3 text-[10px] text-[hsl(var(--muted-foreground))]">
+                  <span className="flex items-center gap-1">
+                    <Hash className="h-3 w-3" />
+                    {tool.usageCount.toLocaleString()} calls
+                  </span>
+                  {!isSessionView && (
+                    <span className="flex items-center gap-1">
+                      <FolderOpen className="h-3 w-3" />
+                      {tool.sessionCount} sessions
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Usage bar */}
+              <div className="mt-2 h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${style.color} transition-all`}
+                  style={{
+                    width: `${(tool.usageCount / maxUsage) * 100}%`,
+                  }}
+                />
+              </div>
+
+              {/* Percentage */}
+              <div className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
+                {((tool.usageCount / totalUsage) * 100).toFixed(1)}% of total
               </div>
             </div>
-
-            {/* Usage bar */}
-            <div className="mt-2 h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-              <div
-                className={`h-full rounded-full ${getToolColor(tool.toolName)} transition-all`}
-                style={{
-                  width: `${(tool.usageCount / maxUsage) * 100}%`,
-                }}
-              />
-            </div>
-
-            {/* Percentage */}
-            <div className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
-              {((tool.usageCount / totalUsage) * 100).toFixed(1)}% of total
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

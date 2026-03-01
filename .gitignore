@@ -8,8 +8,9 @@ dist/
 # Data (local DB, downloaded models — not for public repo)
 data/
 
-# Internal docs (planning, strategy — not for public repo)
+# Internal docs & planning (not for public repo)
 docs/
+루미/
 
 # Claude Code local settings & memory
 .claude/

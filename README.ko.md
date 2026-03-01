@@ -40,7 +40,7 @@ npm run dev        # http://localhost:2000
 
 ## MCP 서버 (Claude Code 에피소딕 메모리)
 
-`.mcp.json`이 프로젝트 루트에 이미 포함되어 있다. Loomi 디렉 토리에서 Claude Code를 실행하면 자동으로 MCP 서버가 등록된다:
+`.mcp.json`이 프로젝트 루트에 이미 포함되어 있다. Loomi 디렉토리에서 Claude Code를 실행하면 자동으로 MCP 서버가 등록된다:
 
 ```json
 // .mcp.json (이미 포함됨)
@@ -62,29 +62,24 @@ npm run dev        # http://localhost:2000
 | `show` | 세션 UUID로 전체 대화 읽기. 페이지네이션 지원 |
 | `status` | 인덱싱 현황 조회 |
 
-**Claude Code 안에서 사용 예:**
-```
-과거 대화에서 "SQLite WAL lock error" 찾아줘
-→ loomi-memory.search({ query: "SQLite WAL lock error", mode: "both", limit: 5 })
+### 모범 사례: 선택적 메모리 리서치 (Selective Memory Research)
 
-Drizzle ORM 쓰다가 TypeError 났던 세션 찾아줘
-→ loomi-memory.search({ query: ["Drizzle ORM", "TypeError"], mode: "vector", limit: 10 })
-```
+에이전트가 모든 턴에서 토큰을 낭비하지 않으면서도 똑똑하게 기억을 활용하려면 **선택적 메모리 리서치 프로토콜**을 따르는 것이 좋습니다. 이 프로젝트의 `CLAUDE.md`와 `GEMINI.md`에 이미 설정되어 있습니다.
+
+**핵심 원칙:** 새로운 기능 구현, 아키텍처 설계, 복잡한 버그 수정과 같은 **지시(Directive)**를 받았을 때만 메모리를 검색하세요. 단순 파일 읽기나 리스트 확인 시에는 검색을 생략합니다.
+
+**워크플로우 예시:**
+1.  **사용자:** "Supabase를 사용해서 새로운 로그인 플로우를 구현해줘."
+2.  **에이전트 (자동):** `loomi-memory:search({ query: "Supabase login flow" })` 호출
+3.  **에이전트:** "2월 20일 세션 기록에서 Supabase PKCE 플로우를 사용하기로 결정하신 내용을 확인했습니다. 해당 맥락을 바탕으로 구현을 시작하겠습니다."
 
 ### Gemini CLI에서 사용
 
-Gemini CLI의 모든 세션에서 Loomi의 메모리를 전역적으로 사용하려면 다음 명령어를 실행하세요 (경로는 실제 프로젝트 경로로 수정해야 합니다):
+Gemini CLI의 모든 세션에서 Loomi의 메모리를 전역적으로 사용하려면 다음 명령어를 실행하세요:
 
 ```bash
 gemini mcp add loomi-memory "bash" "-c" "cd /home/jch/workspace/loomi && npm run mcp-server" --scope user
 ```
-
-등록 후 Gemini CLI에게 다음과 같이 질문할 수 있습니다:
-- *"과거 대화에서 React 리팩토링 팁 찾아줘"*
-- *"에피소딕 메모리 인덱싱 상태가 어때?"*
-- *"graceful shutdown에 대해 논의했던 세션 상세 내용 보여줘"*
-
-세션 종료 시 도구·언어·프레임워크·에러가 자동 태깅되므로 `"TypeScript Next.js"` 나 `"bash read TypeError"` 같은 모호한 표 현으로도 정확한 세션을 찾을 수 있다.
 
 
 ## 기술 스택

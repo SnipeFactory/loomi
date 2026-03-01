@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch server.ts",
-    "dev:clean": "rm -f .next/dev/lock && fuser -k 2000/tcp 2>/dev/null; tsx watch server.ts",
-    "build": "next build",
-    "start": "NODE_ENV=production tsx server.ts",
+    "dev": "NODE_OPTIONS='--max-old-space-size=4096' tsx watch server.ts",
+    "dev:clean": "rm -f .next/dev/lock && fuser -k 2000/tcp 2>/dev/null; NODE_OPTIONS='--max-old-space-size=4096' tsx watch server.ts",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' next build",
+    "start": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=4096' tsx server.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "mcp-server": "tsx src/mcp-server.ts"
+    "mcp-server": "NODE_OPTIONS='--max-old-space-size=4096' tsx src/mcp-server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

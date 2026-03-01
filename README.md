@@ -82,18 +82,24 @@ Claude Code will then have three tools:
 | `show` | Read the full message history of a session by UUID. Supports pagination. |
 | `status` | Check how many messages are indexed vs. pending. |
 
+### Best Practices: Selective Memory Research
+
+To make your AI agents smarter without wasting tokens on every turn, follow the **Selective Memory Research Protocol**. This is already configured in this project's `CLAUDE.md` and `GEMINI.md`.
+
+**The Rule:** Only search episodic memory when starting a **Directive** (implementation, architecture design, complex bug fix). Skip search for simple inquiries (reading files, listing directories, running tests).
+
+**Example Workflow:**
+1.  **User:** "Implement a new login flow using Supabase."
+2.  **Agent (Automatic):** `loomi-memory:search({ query: "Supabase login flow" })`
+3.  **Agent:** "I found a past session from Feb 20th where you decided to use PKCE flow for Supabase. I'll proceed with that context."
+
 ### Usage with Gemini CLI
 
-To use Loomi's memory globally across all your Gemini CLI sessions, run the following command (replacing the path with your actual project path):
+To use Loomi's memory globally across all your Gemini CLI sessions, run the following command:
 
 ```bash
 gemini mcp add loomi-memory "bash" "-c" "cd /home/jch/workspace/loomi && npm run mcp-server" --scope user
 ```
-
-Once added, you can ask Gemini CLI questions like:
-- *"Search my past conversations for React refactoring tips"*
-- *"What is the status of my episodic memory?"*
-- *"Show me the details of the session where we discussed graceful shutdown"*
 
 ## Stack
 

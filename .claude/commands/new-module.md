@@ -1,20 +1,20 @@
-# /new-module — Loomi 모듈 스캐폴딩
+# /new-module — Loomi Module Scaffolding
 
-새 모듈을 생성합니다. 인자: `$ARGUMENTS` (모듈 ID, 예: `my-analyzer`)
+Creates a new module structure. Argument: `$ARGUMENTS` (Module ID, e.g., `my-analyzer`)
 
-## 필수 생성 파일
+## Required Files
 
 ### 1. `modules/$ARGUMENTS/manifest.json`
 
 ```json
 {
   "id": "$ARGUMENTS",
-  "name": "(사용자에게 물어볼 것)",
+  "name": "(Ask the user)",
   "version": "1.0.0",
-  "description": "(사용자에게 물어볼 것)",
+  "description": "(Ask the user)",
   "author": "Loomi",
   "loomiVersion": "1.0.0",
-  "runtime": "(server | client | both - 사용자에게 물어볼 것)",
+  "runtime": "(server | client | both - Ask the user)",
   "serverEntry": "index.ts",
   "hooks": [],
   "slots": [],
@@ -24,9 +24,9 @@
 }
 ```
 
-유효한 hooks: `onModuleInit`, `onModuleDestroy`, `onLogCaptured`, `onSessionEnd`, `onSearch`, `onViewRender`
-유효한 slots: `sidebar-bottom`, `sidebar-sessions-panel`, `session-header`, `session-footer`, `main-content`, `main-bottom-panel`, `settings-section`
-유효한 permissions: `db:read`, `db:write`, `network`, `filesystem:read`, `process:spawn`
+Valid hooks: `onModuleInit`, `onModuleDestroy`, `onLogCaptured`, `onSessionEnd`, `onSearch`, `onViewRender`
+Valid slots: `sidebar-bottom`, `sidebar-sessions-panel`, `session-header`, `session-footer`, `main-content`, `main-bottom-panel`, `settings-section`
+Valid permissions: `db:read`, `db:write`, `network`, `filesystem:read`, `process:spawn`
 
 ### 2. `modules/$ARGUMENTS/index.ts`
 
@@ -45,31 +45,31 @@ export async function destroy() {
 }
 
 export const hooks = {
-  // manifest.json의 hooks에 맞춰 구현
+  // Implement based on manifest.json hooks
 };
 ```
 
-### 3. UI 컴포넌트가 있는 경우 (runtime이 "client" 또는 "both")
+### 3. If UI Components Exist (runtime is "client" or "both")
 
-- `modules/$ARGUMENTS/components/` 디렉토리 생성
-- 필요한 컴포넌트 `.tsx` 파일 생성
-- `modules/$ARGUMENTS/hooks/` 디렉토리 생성 (필요 시)
+- Create `modules/$ARGUMENTS/components/` directory
+- Create required `.tsx` component files
+- Create `modules/$ARGUMENTS/hooks/` directory (if needed)
 
-## 필수 수정 파일
+## Required Modifications
 
-### 4. `tsconfig.json` — paths에 추가
+### 4. `tsconfig.json` — Add to paths
 
 ```json
 "@modules/$ARGUMENTS/*": ["./modules/$ARGUMENTS/*"]
 ```
 
-### 5. `next.config.ts` — turbopack.resolveAlias에 추가
+### 5. `next.config.ts` — Add to turbopack.resolveAlias
 
 ```typescript
 "@modules/$ARGUMENTS": path.resolve(__dirname, "modules/$ARGUMENTS"),
 ```
 
-### 6. UI 컴포넌트가 있는 경우: `src/components/modules/module-component-registry.ts`
+### 6. For UI Modules: `src/components/modules/module-component-registry.ts`
 
 ```typescript
 "$ARGUMENTS/component-name": lazy(
@@ -77,11 +77,11 @@ export const hooks = {
 ),
 ```
 
-## 체크리스트
+## Checklist
 
-- [ ] manifest.json의 hooks/slots/permissions가 유효한 값인지 확인
-- [ ] index.ts의 hooks 객체가 manifest.json의 hooks 배열과 일치하는지 확인
-- [ ] tsconfig.json path alias 추가됨
-- [ ] next.config.ts turbopack alias 추가됨
-- [ ] UI 모듈이면 module-component-registry.ts에 등록됨
-- [ ] `npm run build` 성공 확인
+- [ ] Verify manifest.json hooks/slots/permissions are valid.
+- [ ] Ensure index.ts hooks match manifest.json.
+- [ ] Path alias added to tsconfig.json.
+- [ ] Turbopack alias added to next.config.ts.
+- [ ] UI components registered in module-component-registry.ts (if applicable).
+- [ ] Confirm `npm run build` succeeds.

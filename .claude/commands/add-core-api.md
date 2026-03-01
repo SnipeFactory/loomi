@@ -1,37 +1,37 @@
-# /add-core-api — Core Data Access API 추가
+# /add-core-api — Add Core Data Access API
 
-새 Core API 함수와 HTTP wrapper를 생성합니다. 인자: `$ARGUMENTS` (기능명, 예: `analytics`)
+Creates a new Core API function and its HTTP wrapper. Argument: `$ARGUMENTS` (Feature name, e.g., `analytics`)
 
-## 아키텍처 규칙
+## Architectural Rules
 
-- Core API (`src/core/api/`)는 **동기 TypeScript 함수** — 같은 프로세스에서 호출, HTTP 오버헤드 없음
-- HTTP Route (`src/app/api/`)는 **thin wrapper** — Core API 함수를 호출하고 NextResponse.json으로 감쌀 뿐
-- DB 쿼리 로직은 반드시 Core API에만 존재
+- **Core API (`src/core/api/`)**: Synchronous TypeScript functions. Called within the same process, no HTTP overhead.
+- **HTTP Route (`src/app/api/`)**: Thin wrapper. Calls the Core API function and returns a `NextResponse.json`.
+- **DB Query Logic**: Must reside exclusively within the Core API.
 
-## 생성/수정 파일
+## Created/Modified Files
 
-### 1. `src/core/api/$ARGUMENTS.ts` — Core API 함수
+### 1. `src/core/api/$ARGUMENTS.ts` — Core API Function
 
-기존 패턴 참고 (`src/core/api/sessions.ts`):
+Refer to existing patterns (e.g., `src/core/api/sessions.ts`):
 
 ```typescript
 import { getDb } from "../db";
-import { 테이블명 } from "../db/schema";
-// 필요한 drizzle-orm import
+import { tableName } from "../db/schema";
+// Required drizzle-orm imports
 
-export function 함수명(opts?: 옵션타입): 반환타입 {
+export function functionName(opts?: OptionType): ReturnType {
   const db = getDb();
-  // Drizzle ORM 쿼리 (동기)
-  return 결과;
+  // Drizzle ORM Query (Synchronous)
+  return result;
 }
 ```
 
-### 2. `src/core/api/types.ts` — 타입 추가 (필요 시)
+### 2. `src/core/api/types.ts` — Add Types (if needed)
 
-요청 옵션과 응답 타입을 여기에 정의:
+Define request options and response types here:
 
 ```typescript
-export interface 옵션타입 {
+export interface OptionType {
   limit?: number;
   page?: number;
   // ...
@@ -42,24 +42,24 @@ export interface 옵션타입 {
 
 ```typescript
 import { NextResponse } from "next/server";
-import { 함수명 } from "@core/api/$ARGUMENTS";
+import { functionName } from "@core/api/$ARGUMENTS";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  // searchParams에서 파라미터 추출
-  const result = 함수명({ /* opts */ });
+  // Extract parameters from searchParams
+  const result = functionName({ /* opts */ });
   return NextResponse.json(result);
 }
 ```
 
-### 4. `src/core/db/schema.ts` — 새 테이블 (필요 시에만)
+### 4. `src/core/db/schema.ts` — New Table (Only if necessary)
 
-새 데이터 저장이 필요한 경우에만 테이블 추가. 기존 테이블로 충분한지 먼저 확인.
+Only add a table if new data storage is required. Check if existing tables are sufficient first.
 
-## 체크리스트
+## Checklist
 
-- [ ] Core API 함수가 동기(sync)인지 확인 (better-sqlite3는 동기)
-- [ ] 타입이 `src/core/api/types.ts`에 정의됨
-- [ ] HTTP route가 Core API 함수를 호출만 하는 thin wrapper인지 확인
-- [ ] route에 인라인 DB 쿼리가 없는지 확인
-- [ ] `npm run build` 성공 확인
+- [ ] Confirm Core API function is synchronous (better-sqlite3 is sync).
+- [ ] Types defined in `src/core/api/types.ts`.
+- [ ] HTTP route is a thin wrapper calling the Core API.
+- [ ] No inline DB queries in the route file.
+- [ ] Confirm `npm run build` succeeds.

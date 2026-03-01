@@ -1,10 +1,10 @@
-# /add-slot — Module UI 슬롯 추가
+# /add-slot — Add Module UI Slot
 
-새 ModuleSlotId를 등록합니다. 인자: `$ARGUMENTS` (슬롯 ID, 예: `toolbar-actions`)
+Registers a new ModuleSlotId. Argument: `$ARGUMENTS` (Slot ID, e.g., `toolbar-actions`)
 
-## 필수 수정 파일 (2곳)
+## Required Modifications (2 Files)
 
-### 1. `src/core/modules/types.ts` — ModuleSlotId union에 추가
+### 1. `src/core/modules/types.ts` — Add to ModuleSlotId union
 
 ```typescript
 export type ModuleSlotId =
@@ -15,29 +15,29 @@ export type ModuleSlotId =
   | "main-content"
   | "main-bottom-panel"
   | "settings-section"
-  | "$ARGUMENTS";  // ← 추가
+  | "$ARGUMENTS";  // ← Add here
 ```
 
-### 2. `src/core/modules/manifest.ts` — VALID_SLOTS 배열에 추가
+### 2. `src/core/modules/manifest.ts` — Add to VALID_SLOTS array
 
 ```typescript
 const VALID_SLOTS: ModuleSlotId[] = [
   "sidebar-bottom", "sidebar-sessions-panel", "session-header", "session-footer",
   "main-content", "main-bottom-panel", "settings-section",
-  "$ARGUMENTS",  // ← 추가
+  "$ARGUMENTS",  // ← Add here
 ];
 ```
 
-## 슬롯 사용법 안내
+## Slot Usage Guide
 
-슬롯을 추가한 후, 아래 방법 중 하나로 렌더링:
+After adding the slot, render it using one of the following methods:
 
-### 방법 A: ModuleSlot 컴포넌트 (동적, 다수 모듈)
+### Method A: ModuleSlot Component (Dynamic, multiple modules)
 ```tsx
 <ModuleSlot slotId="$ARGUMENTS" sessionId={sessionId} />
 ```
 
-### 방법 B: ModuleOrFallback (특정 모듈 + fallback)
+### Method B: ModuleOrFallback (Specific module + fallback)
 ```tsx
 <ModuleOrFallback
   componentPath="module-id/component-name"
@@ -45,11 +45,11 @@ const VALID_SLOTS: ModuleSlotId[] = [
 />
 ```
 
-app-shell.tsx에서 적절한 위치에 배치할 것.
+Place at the appropriate location in `app-shell.tsx`.
 
-## 체크리스트
+## Checklist
 
-- [ ] `types.ts`의 ModuleSlotId union에 추가됨
-- [ ] `manifest.ts`의 VALID_SLOTS 배열에 추가됨
-- [ ] 슬롯 ID가 kebab-case인지 확인
-- [ ] 사용할 모듈의 manifest.json slots 배열에도 추가됨
+- [ ] Added to ModuleSlotId union in `types.ts`.
+- [ ] Added to VALID_SLOTS array in `manifest.ts`.
+- [ ] Verified slot ID is in kebab-case.
+- [ ] Added to the `slots` array in the manifest.json of modules that will use it.

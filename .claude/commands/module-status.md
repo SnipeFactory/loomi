@@ -1,18 +1,18 @@
-# /module-status — 모듈 런타임 상태 확인
+# /module-status — Check Module Runtime Status
 
-Loomi 개발 서버가 실행 중인지 확인하고, 모듈 상태를 조회합니다.
+Verifies if the Loomi dev server is running and retrieves the status of all modules.
 
-## 실행 절차
+## Execution Steps
 
-### 1. 개발 서버 확인
+### 1. Check Development Server
 
 ```bash
 curl -s http://localhost:2000/api/modules 2>/dev/null || echo "SERVER_NOT_RUNNING"
 ```
 
-서버가 실행 중이 아니면 사용자에게 `npm run dev`를 먼저 실행하라고 안내.
+If the server is not running, instruct the user to run `npm run dev` first.
 
-### 2. 전체 모듈 목록 조회
+### 2. List All Modules
 
 ```bash
 curl -s http://localhost:2000/api/modules | node -e "
@@ -26,17 +26,17 @@ curl -s http://localhost:2000/api/modules | node -e "
 "
 ```
 
-### 3. 개별 모듈 상세 (runtime status 포함)
+### 3. Individual Module Details (Including Runtime Status)
 
-등록된 각 모듈에 대해:
+For each registered module:
 
 ```bash
 curl -s http://localhost:2000/api/modules/{moduleId}
 ```
 
-### 4. 슬롯별 활성 모듈 확인
+### 4. Verify Active Modules by Slot
 
-주요 슬롯들의 현재 렌더링 상태:
+Current rendering status for major slots:
 
 ```bash
 for slot in main-content sidebar-sessions-panel main-bottom-panel session-header; do
@@ -45,9 +45,9 @@ for slot in main-content sidebar-sessions-panel main-bottom-panel session-header
 done
 ```
 
-## 출력 형식
+## Output Format
 
-결과를 아래와 같은 표로 정리해서 보여줄 것:
+Organize findings into a table:
 
 ```
 | Module ID         | Name             | Status  | Slots                    |
@@ -57,4 +57,4 @@ done
 | log-summarizer    | Log Summarizer   | loaded  | session-header           |
 ```
 
-에러가 있는 모듈은 error 필드 내용을 함께 표시.
+Include the content of the `error` field for any modules with errors.

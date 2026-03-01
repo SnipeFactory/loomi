@@ -7,8 +7,8 @@
   "filePatterns": ["**/chats/session-*.json"],
   "defaultPaths": ["~/.gemini/tmp"],
   "capabilities": {
-    "hasThinking": false,
-    "hasCacheTokens": false,
+    "hasThinking": true,
+    "hasCacheTokens": true,
     "hasToolUse": true,
     "hasCodeBlocks": true,
     "hasFileChanges": false,

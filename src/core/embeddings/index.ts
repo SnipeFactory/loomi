@@ -39,6 +39,15 @@ export async function initMultilingualEmbeddings(): Promise<void> {
   console.log("[Loomi] ML embedding model loaded:", ML_MODEL);
 }
 
+export async function disposeEmbeddings(): Promise<void> {
+  await Promise.allSettled([
+    enPipeline?.dispose(),
+    mlPipeline?.dispose(),
+  ]);
+  enPipeline = null;
+  mlPipeline = null;
+}
+
 /**
  * Generate a 384-dimensional embedding using the English model.
  */

@@ -9,6 +9,22 @@ interface GeminiMessage {
   timestamp: string;
   type: "user" | "gemini" | "assistant" | "model" | "info" | string;
   content: string | Array<{ text?: string }>;
+  thoughts?: Array<{ subject: string; description: string }>;
+  tokens?: {
+    input: number;
+    output: number;
+    cached?: number;
+    thoughts?: number;
+    tool?: number;
+    total: number;
+  };
+  model?: string;
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    args: any;
+    result?: any;
+  }>;
 }
 
 interface GeminiSession {
@@ -78,6 +94,10 @@ const adapter: IAdapter = {
     const firstUserMsg = data.messages.find((m) => m.type === "user");
     const title = firstUserMsg ? (extractText(firstUserMsg.content)?.slice(0, 80) ?? null) : null;
 
+    // Detect primary model from assistant messages
+    const firstAssistantWithModel = data.messages.find(m => m.model);
+    const primaryModel = firstAssistantWithModel?.model || null;
+
     const session: ParsedSession = {
       sessionUuid,
       toolType: "gemini-cli",
@@ -87,7 +107,7 @@ const adapter: IAdapter = {
       cliVersion: null,
       startedAt,
       lastActivityAt,
-      primaryModel: null,
+      primaryModel,
       sourceFilePath: filePath,
       title,
       provider: "google",
@@ -110,6 +130,26 @@ const adapter: IAdapter = {
 
       const role: "user" | "assistant" = type === "user" ? "user" : "assistant";
 
+      // Extract thinking content (thoughts)
+      let thinkingContent: string | null = null;
+      if (msg.thoughts && Array.isArray(msg.thoughts)) {
+        thinkingContent = msg.thoughts
+          .map(t => `[${t.subject}] ${t.description}`)
+          .join("\n\n");
+      }
+
+      // Extract tool use
+      let toolUseJson: string | null = null;
+      if (msg.toolCalls && Array.isArray(msg.toolCalls)) {
+        const tools = msg.toolCalls.map(tc => ({
+          id: tc.id,
+          name: tc.name,
+          input: tc.args,
+          output: tc.result
+        }));
+        toolUseJson = JSON.stringify(tools);
+      }
+
       parsedMessages.push({
         sessionUuid,
         messageUuid: msg.id,
@@ -119,15 +159,15 @@ const adapter: IAdapter = {
         userType: null,
         isSidechain: false,
         apiMessageId: null,
-        model: null,
+        model: msg.model || null,
         textContent: extractText(msg.content),
-        thinkingContent: null,
-        toolUseJson: null,
+        thinkingContent,
+        toolUseJson,
         stopReason: null,
-        inputTokens: null,
-        outputTokens: null,
+        inputTokens: msg.tokens?.input ?? null,
+        outputTokens: (msg.tokens?.output ?? 0) + (msg.tokens?.thoughts ?? 0),
         cacheCreationTokens: null,
-        cacheReadTokens: null,
+        cacheReadTokens: msg.tokens?.cached ?? null,
         timestamp: msg.timestamp || startedAt,
         sortOrder: sortOrder++,
         provider: "google",

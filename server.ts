@@ -6,6 +6,14 @@ import { getModuleRuntime } from "@core/modules/runtime";
 import { registerBuiltinAdapters, discoverExternalAdapters, autoRegisterAdapterPaths } from "@core/adapters";
 import { closeDb } from "@core/db";
 
+// Register signal handlers immediately — before any async init
+// so tsx can kill the process at any startup stage
+process.on("SIGTERM", () => process.exit(0));
+process.on("SIGINT", () => {
+  console.log("[Loomi] SIGINT received, exiting...");
+  process.exit(0);
+});
+
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "2000", 10);
@@ -38,17 +46,6 @@ app.prepare().then(async () => {
   server.listen(port, () => {
     console.log(`[Loomi] Running on http://${hostname}:${port}`);
   });
-
-  const shutdown = async (signal: string) => {
-    console.log(`[Loomi] ${signal} received, shutting down...`);
-    server.close();
-    await stopWatcher();
-    closeDb();
-    process.exit(0);
-  };
-
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT", () => shutdown("SIGINT"));
 }).catch((err) => {
   console.error("[Loomi] Fatal startup error:", err);
   process.exit(1);

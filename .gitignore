@@ -13,7 +13,7 @@ docs/
 루미/
 
 # Claude Code local settings & memory
-.claude/
+# .claude/
 
 # Environment
 .env

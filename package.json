@@ -3,11 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--max-old-space-size=6144 --expose-gc' tsx watch server.ts",
-    "dev:clean": "rm -f .next/dev/lock && fuser -k 2000/tcp 2>/dev/null; NODE_OPTIONS='--max-old-space-size=6144 --expose-gc' tsx watch server.ts",
-    "dev:safe": "until NODE_OPTIONS='--max-old-space-size=6144 --expose-gc' tsx watch server.ts; do echo '[Loomi] Crashed — restarting in 3s...'; sleep 3; done",
+    "dev": "concurrently --kill-others-on-fail -n server,next -c blue,green \"NODE_OPTIONS='--max-old-space-size=6144 --expose-gc' tsx watch backend.ts\" \"LOOMI_BACKEND_URL=http://localhost:2001 NODE_OPTIONS='--max-old-space-size=6144' next dev -p 2000\"",
+    "dev:server": "NODE_OPTIONS='--max-old-space-size=6144 --expose-gc' tsx watch backend.ts",
+    "dev:ui": "LOOMI_BACKEND_URL=http://localhost:2001 NODE_OPTIONS='--max-old-space-size=6144' next dev -p 2000",
+    "dev:clean": "fuser -k 2000/tcp 2>/dev/null; fuser -k 2001/tcp 2>/dev/null; npm run dev",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' next build",
-    "start": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=4096' tsx server.ts",
+    "start:server": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=4096 --expose-gc' tsx backend.ts",
+    "start:ui": "NODE_ENV=production LOOMI_BACKEND_URL=http://localhost:2001 NODE_OPTIONS='--max-old-space-size=4096' next start -p 2000",
+    "start": "concurrently -n server,next -c blue,green \"npm:start:server\" \"npm:start:ui\"",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "mcp-server": "NODE_OPTIONS='--max-old-space-size=4096' tsx src/mcp-server.ts",
@@ -18,12 +21,14 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@tailwindcss/postcss": "^4.2.1",
+    "@types/adm-zip": "^0.5.7",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@xenova/transformers": "^2.17.2",
+    "adm-zip": "^0.5.16",
     "better-sqlite3": "^12.6.2",
     "chokidar": "^4.0.3",
     "class-variance-authority": "^0.7.1",
@@ -46,6 +51,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.9",
     "tsx": "^4.21.0"
   }

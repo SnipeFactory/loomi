@@ -57,26 +57,10 @@ const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(async () => {
-  // 1. Run database migrations
+  // 1. Run DB migrations (must complete before serving)
   await runMigrations();
 
-  // 2. Start embedding worker (isolated child process — must be before modules)
-  await getEmbeddingWorkerClient().start();
-
-  // 3. Register adapters (built-in + external)
-  registerBuiltinAdapters();
-  await discoverExternalAdapters();
-
-  // 4. Initialize module runtime
-  const moduleRuntime = getModuleRuntime();
-  await moduleRuntime.discover();
-
-  // 4.5. Auto-register adapter default paths
-  autoRegisterAdapterPaths();
-
-  // 5. Start file watcher
-  await startWatcher();
-
+  // 2. Start HTTP server immediately — browser can connect while background tasks init
   const server = createServer(async (req, res) => {
     await handle(req, res);
   });
@@ -84,6 +68,41 @@ app.prepare().then(async () => {
   server.listen(port, () => {
     console.log(`[Loomi] Running on http://${hostname}:${port}`);
   });
+
+  // 3. Background init — non-blocking, failures are logged but don't crash the server
+  (async () => {
+    try {
+      await getEmbeddingWorkerClient().start();
+    } catch (err) {
+      console.error("[Loomi] Embedding worker failed to start:", err);
+    }
+
+    try {
+      registerBuiltinAdapters();
+      await discoverExternalAdapters();
+    } catch (err) {
+      console.error("[Loomi] Adapter registration failed:", err);
+    }
+
+    try {
+      const moduleRuntime = getModuleRuntime();
+      await moduleRuntime.discover();
+    } catch (err) {
+      console.error("[Loomi] Module discovery failed:", err);
+    }
+
+    try {
+      autoRegisterAdapterPaths();
+    } catch (err) {
+      console.error("[Loomi] Adapter path registration failed:", err);
+    }
+
+    try {
+      await startWatcher();
+    } catch (err) {
+      console.error("[Loomi] Watcher failed to start:", err);
+    }
+  })();
 }).catch((err) => {
   console.error("[Loomi] Fatal startup error:", err);
   process.exit(1);

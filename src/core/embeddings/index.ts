@@ -2,21 +2,48 @@
  * Local embedding engine using Transformers.js.
  * Runs 100% locally — no API calls.
  *
- * EN model:  Xenova/all-MiniLM-L6-v2               (384d, English-optimized)
- * ML model:  Xenova/paraphrase-multilingual-MiniLM-L12-v2 (384d, 50+ languages incl. Korean)
+ * Supports multiple models simultaneously, each with its own TTL-based auto-unload.
+ * Model loaded on first use, disposed after EMBEDDING_TTL_MS of inactivity (default 10 min).
+ *
+ * Model → vector table registry:
+ *   Xenova/all-MiniLM-L6-v2                       → vec_messages
+ *   Xenova/paraphrase-multilingual-MiniLM-L12-v2   → vec_messages_ml
  */
 
 import path from "path";
 
-const EN_MODEL = "Xenova/all-MiniLM-L6-v2";
-const ML_MODEL = "Xenova/paraphrase-multilingual-MiniLM-L12-v2";
+export const MODEL_TABLE_REGISTRY: Record<string, string> = {
+  "Xenova/all-MiniLM-L6-v2": "vec_messages",
+  "Xenova/paraphrase-multilingual-MiniLM-L12-v2": "vec_messages_ml",
+};
+
+export const DEFAULT_MODEL = "Xenova/paraphrase-multilingual-MiniLM-L12-v2";
+
 const MAX_TEXT_LENGTH = 2000;
 const CACHE_DIR = path.resolve(process.cwd(), "data", "models");
+const MODEL_TTL_MS = parseInt(process.env.EMBEDDING_TTL_MS || "600000", 10); // 10 minutes
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let enPipeline: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let mlPipeline: any = null;
+interface ModelState {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pipeline: any | null;
+  lastUsedAt: number;
+  ttlTimer: NodeJS.Timeout | null;
+  loadPromise: Promise<void> | null;
+}
+
+const modelStates = new Map<string, ModelState>();
+
+function getOrCreateState(modelName: string): ModelState {
+  if (!modelStates.has(modelName)) {
+    modelStates.set(modelName, {
+      pipeline: null,
+      lastUsedAt: 0,
+      ttlTimer: null,
+      loadPromise: null,
+    });
+  }
+  return modelStates.get(modelName)!;
+}
 
 async function getTransformers() {
   const transformers = await import("@xenova/transformers");
@@ -25,64 +52,73 @@ async function getTransformers() {
   return transformers;
 }
 
-export async function initEmbeddings(): Promise<void> {
-  if (enPipeline) return;
-  const transformers = await getTransformers();
-  enPipeline = await transformers.pipeline("feature-extraction", EN_MODEL, { quantized: true });
-  console.log("[Loomi] EN embedding model loaded:", EN_MODEL);
+async function getOrLoadPipeline(modelName: string): Promise<void> {
+  const state = getOrCreateState(modelName);
+  if (state.pipeline) return;
+  if (!state.loadPromise) {
+    state.loadPromise = (async () => {
+      const t = await getTransformers();
+      state.pipeline = await t.pipeline("feature-extraction", modelName, { quantized: true });
+      console.log("[Loomi] Embedding model loaded:", modelName);
+    })();
+  }
+  await state.loadPromise;
 }
 
-export async function initMultilingualEmbeddings(): Promise<void> {
-  if (mlPipeline) return;
-  const transformers = await getTransformers();
-  mlPipeline = await transformers.pipeline("feature-extraction", ML_MODEL, { quantized: true });
-  console.log("[Loomi] ML embedding model loaded:", ML_MODEL);
+function scheduleTtlCheck(modelName: string): void {
+  const state = getOrCreateState(modelName);
+  if (state.ttlTimer) clearTimeout(state.ttlTimer);
+
+  state.ttlTimer = setTimeout(async () => {
+    state.ttlTimer = null;
+    if (state.pipeline && Date.now() - state.lastUsedAt >= MODEL_TTL_MS) {
+      await state.pipeline.dispose();
+      state.pipeline = null;
+      state.loadPromise = null;
+      console.log("[Loomi] Embedding model unloaded (TTL expired):", modelName);
+    } else if (state.pipeline) {
+      const remaining = MODEL_TTL_MS - (Date.now() - state.lastUsedAt);
+      state.ttlTimer = setTimeout(() => scheduleTtlCheck(modelName), Math.max(remaining, 1000));
+      state.ttlTimer.unref();
+    }
+  }, MODEL_TTL_MS);
+  state.ttlTimer.unref();
 }
 
-export async function disposeEmbeddings(): Promise<void> {
-  await Promise.allSettled([
-    enPipeline?.dispose(),
-    mlPipeline?.dispose(),
-  ]);
-  enPipeline = null;
-  mlPipeline = null;
+function touchModel(modelName: string): void {
+  const state = getOrCreateState(modelName);
+  state.lastUsedAt = Date.now();
+  scheduleTtlCheck(modelName);
 }
 
 /**
- * Generate a 384-dimensional embedding using the English model.
+ * Generate a 384-dimensional embedding using a specific model.
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
-  await initEmbeddings();
-  const output = await enPipeline(text.slice(0, MAX_TEXT_LENGTH), { pooling: "mean", normalize: true });
+export async function generateEmbeddingWithModel(text: string, modelName: string): Promise<number[]> {
+  await getOrLoadPipeline(modelName);
+  touchModel(modelName);
+  const state = getOrCreateState(modelName);
+  const output = await state.pipeline(text.slice(0, MAX_TEXT_LENGTH), { pooling: "mean", normalize: true });
   return Array.from(output.data as Float32Array);
 }
 
 /**
- * Generate a 384-dimensional embedding using the multilingual model (Korean/English/etc.).
+ * Generate a 384-dimensional embedding using the multilingual model.
  */
 export async function generateMultilingualEmbedding(text: string): Promise<number[]> {
-  await initMultilingualEmbeddings();
-  const output = await mlPipeline(text.slice(0, MAX_TEXT_LENGTH), { pooling: "mean", normalize: true });
-  return Array.from(output.data as Float32Array);
+  return generateEmbeddingWithModel(text, DEFAULT_MODEL);
 }
 
 /**
- * Generate an EN embedding for a user+assistant message pair.
+ * Generate a 384-dimensional embedding.
+ * Kept for backward compatibility; delegates to the multilingual model.
  */
-export async function generateMessagePairEmbedding(
-  userMessage: string,
-  assistantMessage: string,
-  toolNames?: string[],
-  sessionTagString?: string
-): Promise<number[]> {
-  const parts = [userMessage, assistantMessage];
-  if (toolNames && toolNames.length > 0) parts.push(`Tools: ${toolNames.join(", ")}`);
-  if (sessionTagString) parts.push(sessionTagString);
-  return generateEmbedding(parts.join("\n\n"));
+export async function generateEmbedding(text: string): Promise<number[]> {
+  return generateMultilingualEmbedding(text);
 }
 
 /**
- * Generate an ML (multilingual) embedding for a user+assistant message pair.
+ * Generate a multilingual embedding for a user+assistant message pair.
  */
 export async function generateMultilingualMessagePairEmbedding(
   userMessage: string,
@@ -90,8 +126,63 @@ export async function generateMultilingualMessagePairEmbedding(
   toolNames?: string[],
   sessionTagString?: string
 ): Promise<number[]> {
+  return generateMessagePairEmbeddingWithModel(userMessage, assistantMessage, DEFAULT_MODEL, toolNames, sessionTagString);
+}
+
+/**
+ * Generate an embedding for a user+assistant message pair using a specific model.
+ */
+export async function generateMessagePairEmbeddingWithModel(
+  userMessage: string,
+  assistantMessage: string,
+  modelName: string,
+  toolNames?: string[],
+  sessionTagString?: string
+): Promise<number[]> {
   const parts = [userMessage, assistantMessage];
   if (toolNames && toolNames.length > 0) parts.push(`Tools: ${toolNames.join(", ")}`);
   if (sessionTagString) parts.push(sessionTagString);
-  return generateMultilingualEmbedding(parts.join("\n\n"));
+  return generateEmbeddingWithModel(parts.join("\n\n"), modelName);
 }
+
+/**
+ * Generate an embedding for a message pair.
+ * Kept for backward compatibility; delegates to multilingual.
+ */
+export async function generateMessagePairEmbedding(
+  userMessage: string,
+  assistantMessage: string,
+  toolNames?: string[],
+  sessionTagString?: string
+): Promise<number[]> {
+  return generateMultilingualMessagePairEmbedding(userMessage, assistantMessage, toolNames, sessionTagString);
+}
+
+/**
+ * Dispose all loaded models immediately (e.g. graceful shutdown).
+ */
+export async function disposeEmbeddings(): Promise<void> {
+  const disposePromises: Promise<void>[] = [];
+  for (const [modelName, state] of modelStates.entries()) {
+    if (state.ttlTimer) {
+      clearTimeout(state.ttlTimer);
+      state.ttlTimer = null;
+    }
+    if (state.pipeline) {
+      disposePromises.push(
+        Promise.resolve(state.pipeline.dispose()).then(() => {
+          state.pipeline = null;
+          state.loadPromise = null;
+          console.log("[Loomi] Embedding model disposed:", modelName);
+        })
+      );
+    }
+  }
+  await Promise.allSettled(disposePromises);
+}
+
+/** No-op: kept for backward compatibility. Models load lazily on first use. */
+export async function initEmbeddings(): Promise<void> { /* no-op */ }
+
+/** No-op: kept for backward compatibility. Models load lazily on first use. */
+export async function initMultilingualEmbeddings(): Promise<void> { /* no-op */ }

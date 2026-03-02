@@ -29,13 +29,16 @@ export class HookBus {
   }
 
   /** Fire-and-forget: runs all handlers, logs errors but doesn't break the chain */
-  async emit(event: HookEventName, payload: unknown): Promise<void> {
+  async emit(event: HookEventName, payload: unknown, timeoutMs = 60_000): Promise<void> {
     const list = this.handlers.get(event);
     if (!list || list.length === 0) return;
 
     for (const { moduleId, handler } of list) {
       try {
-        await handler(payload);
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Hook timed out after ${timeoutMs}ms`)), timeoutMs).unref()
+        );
+        await Promise.race([handler(payload), timeout]);
       } catch (err) {
         console.error(`[Module:${moduleId}] Error in hook ${event}:`, err);
       }

@@ -31,10 +31,13 @@ export type ModuleRuntime = "server" | "client" | "both";
 
 export interface ModuleSettingsField {
   key: string;
-  type: "string" | "number" | "boolean" | "select" | "json";
+  type: "string" | "number" | "boolean" | "select" | "multiselect" | "json";
   label: string;
+  description?: string;
   default?: unknown;
   options?: { label: string; value: string }[];
+  /** Hide this field unless another field matches the given values. */
+  showIf?: { field: string; values: string[] };
 }
 
 export interface ModuleManifest {

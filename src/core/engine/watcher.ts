@@ -47,6 +47,25 @@ export async function startWatcher() {
     }
   }
 
+  // Pre-populate endedSessions with all currently stale sessions so the first
+  // checkForEndedSessions() call doesn't re-fire onSessionEnd for every existing session.
+  // Fresh sessions (not yet stale) and sessions whose lastActivityAt changes later
+  // will still be picked up correctly on subsequent checks.
+  {
+    const cutoff = new Date(Date.now() - SESSION_INACTIVITY_THRESHOLD_MS).toISOString();
+    const alreadyStale = db
+      .select({ id: sessions.id, lastActivityAt: sessions.lastActivityAt })
+      .from(sessions)
+      .where(lt(sessions.lastActivityAt, cutoff))
+      .all();
+    for (const s of alreadyStale) {
+      endedSessions.set(s.id, s.lastActivityAt ?? "");
+    }
+    if (alreadyStale.length > 0) {
+      console.log(`[Loomi] Skipping ${alreadyStale.length} already-stale sessions at startup`);
+    }
+  }
+
   console.log("[Loomi] Watching:", globs);
 
   watcher = watch(globs, {

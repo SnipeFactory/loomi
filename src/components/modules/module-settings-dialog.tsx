@@ -28,7 +28,8 @@ export function ModuleSettingsDialog({ moduleId, manifestJson, onClose }: Module
     if (settings) {
       const initial: Record<string, any> = {};
       for (const field of schema) {
-        initial[field.key] = settings[field.key] ?? field.default ?? "";
+        const fallback = field.type === "multiselect" ? [] : "";
+        initial[field.key] = settings[field.key] ?? field.default ?? fallback;
       }
       setValues(initial);
     }
@@ -67,9 +68,20 @@ export function ModuleSettingsDialog({ moduleId, manifestJson, onClose }: Module
         {/* Settings fields */}
         {hasSettings && (
           <div className="space-y-3">
-            {schema.map((field: any) => (
+            {schema
+              .filter((field: any) => {
+                if (!field.showIf) return true;
+                const cur = values[field.showIf.field];
+                return (field.showIf.values as string[]).includes(cur);
+              })
+              .map((field: any) => (
               <div key={field.key}>
                 <label className="text-xs text-[hsl(var(--muted-foreground))]">{field.label}</label>
+                {field.description && (
+                  <p className="text-[10px] text-[hsl(var(--muted-foreground))] opacity-70 mt-0.5 mb-1">
+                    {field.description}
+                  </p>
+                )}
                 {field.type === "boolean" ? (
                   <label className="mt-1 flex items-center gap-2">
                     <input
@@ -90,6 +102,27 @@ export function ModuleSettingsDialog({ moduleId, manifestJson, onClose }: Module
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
+                ) : field.type === "multiselect" ? (
+                  <div className="mt-1 max-h-40 overflow-y-auto rounded-md bg-[hsl(var(--muted))] p-2 space-y-1">
+                    {(field.options || []).map((opt: any) => {
+                      const cur: string[] = Array.isArray(values[field.key]) ? values[field.key] : [];
+                      return (
+                        <label key={opt.value} className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={cur.includes(opt.value)}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...cur, opt.value]
+                                : cur.filter((v: string) => v !== opt.value);
+                              setValues({ ...values, [field.key]: next });
+                            }}
+                          />
+                          <span className="text-[hsl(var(--foreground))]">{opt.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 ) : field.type === "json" ? (
                   <textarea
                     value={typeof values[field.key] === "string" ? values[field.key] : JSON.stringify(values[field.key], null, 2)}

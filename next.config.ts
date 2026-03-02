@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     resolveAlias: {
       "@features/session-explorer": path.resolve(__dirname, "src/features/session-explorer"),
+      "@features/episodic-memory": path.resolve(__dirname, "src/features/episodic-memory"),
     },
   },
 };

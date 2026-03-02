@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { searchMemory, indexSession, indexAll, getIndexingStatus, cleanupNullVectors, cleanupToolResultVectors, cleanupNoiseVectors } from "@core/api/memory";
+import { searchMemory, indexSession, indexAll, getIndexingStatus, cleanupNullVectors, cleanupToolResultVectors, cleanupNoiseVectors, searchSessions, indexAllSessionSummaries } from "@core/api/memory";
+import { getEmbeddingWorkerClient } from "@core/embeddings/worker-client";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -10,12 +11,30 @@ export async function GET(request: Request) {
     return NextResponse.json(status);
   }
 
+  if (action === "worker-health") {
+    const health = getEmbeddingWorkerClient().getWorkerHealth();
+    return NextResponse.json(health);
+  }
+
   // Default: search
   const q = searchParams.get("q");
   if (!q) {
     return NextResponse.json({ error: "q is required" }, { status: 400 });
   }
 
+  const target = searchParams.get("target");
+
+  // Session-level search
+  if (target === "sessions") {
+    const limit = parseInt(searchParams.get("limit") || "10");
+    const after = searchParams.get("after") || undefined;
+    const before = searchParams.get("before") || undefined;
+    const project = searchParams.get("project") || undefined;
+    const results = await searchSessions({ query: q, limit, after, before, project });
+    return NextResponse.json({ results, query: q });
+  }
+
+  // Message-level search (default)
   const mode = (searchParams.get("mode") || "both") as "vector" | "vector-ml" | "text" | "both";
   const limit = parseInt(searchParams.get("limit") || "10");
   const after = searchParams.get("after") || undefined;
@@ -37,6 +56,11 @@ export async function POST(request: Request) {
 
   if (action === "index-all") {
     const count = await indexAll();
+    return NextResponse.json({ indexed: count });
+  }
+
+  if (action === "index-all-summaries") {
+    const count = await indexAllSessionSummaries();
     return NextResponse.json({ indexed: count });
   }
 

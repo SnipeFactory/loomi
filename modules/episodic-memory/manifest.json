@@ -2,14 +2,38 @@
   "id": "episodic-memory",
   "name": "Episodic Memory",
   "version": "1.0.0",
-  "description": "Semantic vector search over past conversations. Indexes message pairs with local embeddings (all-MiniLM-L6-v2) and provides hybrid search (vector + FTS5).",
+  "description": "Semantic vector search over past conversations. Indexes message pairs with local embeddings and provides hybrid search (vector + FTS5). Automatically selects the embedding model based on detected language.",
   "author": "Loomi",
   "loomiVersion": "1.0.0",
   "runtime": "server",
   "serverEntry": "index.ts",
   "hooks": ["onModuleInit", "onSessionEnd"],
-  "slots": [],
+  "slots": ["insight-tab"],
   "permissions": ["db:read", "db:write"],
   "isPremium": false,
-  "tier": "explorer"
+  "tier": "explorer",
+  "settingsSchema": [
+    {
+      "key": "defaultModel",
+      "type": "select",
+      "label": "Default Embedding Model",
+      "default": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+      "options": [
+        {
+          "label": "Multilingual — Korean / English / 50+ languages",
+          "value": "Xenova/paraphrase-multilingual-MiniLM-L12-v2"
+        },
+        {
+          "label": "English-optimized — faster, English only",
+          "value": "Xenova/all-MiniLM-L6-v2"
+        }
+      ]
+    },
+    {
+      "key": "languageModelMap",
+      "type": "json",
+      "label": "Language → Model Overrides (ISO 639-3 codes)",
+      "default": "{\"kor\": \"Xenova/paraphrase-multilingual-MiniLM-L12-v2\", \"eng\": \"Xenova/all-MiniLM-L6-v2\"}"
+    }
+  ]
 }

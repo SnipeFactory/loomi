@@ -2,6 +2,7 @@
 
 import { useState, Suspense, lazy } from "react";
 import { SidebarPaths } from "./sidebar-paths";
+import "@features/episodic-memory/register";
 
 const InsightPanel = lazy(() => import("@features/session-explorer/components/insight-panel"));
 const SidebarSessions = lazy(() =>

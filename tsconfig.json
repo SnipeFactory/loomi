@@ -32,6 +32,9 @@
       "@features/session-explorer/*": [
         "./src/features/session-explorer/*"
       ],
+      "@features/episodic-memory/*": [
+        "./src/features/episodic-memory/*"
+      ]
     }
   },
   "include": [
@@ -39,7 +42,8 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next/dev/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

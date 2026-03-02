@@ -18,6 +18,8 @@ Architecture: Core Engine (Collection/Storage) + Features (Core UI) + Module Lay
 
 **Crucial: Always communicate with the user in their preferred language (e.g., Korean).** While instructions and internal documentation are in English for global compatibility and model consistency, user interaction should remain in the language they use.
 
+**Commit Messages:** All git commit messages must be written in English, following conventional commit standards (e.g., `feat:`, `fix:`, `docs:`).
+
 ## Selective Memory Research Rule (Mandatory)
 
 Agents must check Loomi's episodic memory before starting any significant task to maintain consistency and recover past decisions.

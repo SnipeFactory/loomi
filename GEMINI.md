@@ -6,6 +6,8 @@ This document defines the core principles for Gemini CLI when working on the Loo
 
 **Crucial: Always communicate with the user in their preferred language (e.g., Korean).** While these instructions are in English for better model consistency, all responses and interactions should remain in the language used by the user.
 
+**Commit Messages:** All git commit messages must be written in English, following conventional commit standards (e.g., `feat:`, `fix:`, `docs:`).
+
 ## Selective Memory Research Protocol (Mandatory)
 
 Before starting any technical task, you must consult the **Loomi Episodic Memory** to recover past context and decisions.

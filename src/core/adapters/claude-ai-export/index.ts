@@ -54,6 +54,7 @@ export class ClaudeAiExportAdapter implements IAdapter {
       hasFileChanges: false,
       hasImageContent: false,
     },
+    status: "stable",
   };
 
   detectFile(_filePath: string): FileDetectionResult {

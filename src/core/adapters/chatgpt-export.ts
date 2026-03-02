@@ -47,9 +47,11 @@ export class ChatGPTExportAdapter implements IAdapter {
       hasToolUse: true,
       hasCodeBlocks: true,
       hasFileChanges: false,
-      hasImageContent: true,
+      hasImageContent: false,
     },
+    status: "coming-soon",
   };
+
 
   detectFile(filePath: string): FileDetectionResult {
     const basename = path.basename(filePath);

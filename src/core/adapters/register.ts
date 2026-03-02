@@ -8,6 +8,7 @@ import { ChatGPTExportAdapter } from "./chatgpt-export";
 import { CursorAdapter } from "./cursor";
 import { AiderAdapter } from "./aider";
 import { ClaudeAiExportAdapter } from "./claude-ai-export";
+import { GeminiCliAdapter } from "./gemini-cli";
 
 export function registerBuiltinAdapters(): void {
   adapterRegistry.register(new ClaudeCliAdapter());
@@ -15,4 +16,5 @@ export function registerBuiltinAdapters(): void {
   adapterRegistry.register(new CursorAdapter());
   adapterRegistry.register(new AiderAdapter());
   adapterRegistry.register(new ClaudeAiExportAdapter());
+  adapterRegistry.register(new GeminiCliAdapter());
 }

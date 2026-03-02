@@ -26,6 +26,7 @@ interface AdapterInfo {
   filePatterns: string[];
   defaultPaths?: string[];
   supportsUpload?: boolean;
+  status?: "stable" | "experimental" | "coming-soon";
 }
 
 interface ImportResult {
@@ -45,21 +46,25 @@ interface WatchedPath {
 
 function CollectorCard({ adapter }: { adapter: AdapterInfo }) {
   const [expanded, setExpanded] = useState(false);
+  const isComingSoon = adapter.status === "coming-soon";
 
   return (
-    <div className="border-b border-[hsl(var(--border))] last:border-0">
+    <div className={`border-b border-[hsl(var(--border))] last:border-0 ${isComingSoon ? "opacity-60" : ""}`}>
       {/* Header */}
       <div className="px-4 py-3">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-          >
-            {expanded
-              ? <ChevronDown className="h-3.5 w-3.5" />
-              : <ChevronRight className="h-3.5 w-3.5" />
-            }
-          </button>
+          {!isComingSoon && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            >
+              {expanded
+                ? <ChevronDown className="h-3.5 w-3.5" />
+                : <ChevronRight className="h-3.5 w-3.5" />
+              }
+            </button>
+          )}
+          {isComingSoon && <div className="w-3.5" />}
           <Cpu className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
           <span className="text-sm font-medium text-[hsl(var(--foreground))]">{adapter.name}</span>
           <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] text-emerald-400">
@@ -70,13 +75,18 @@ function CollectorCard({ adapter }: { adapter: AdapterInfo }) {
               Upload
             </span>
           )}
+          {isComingSoon && (
+            <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-400">
+              Coming Soon
+            </span>
+          )}
           <span className="rounded-full bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[9px] text-[hsl(var(--muted-foreground))]">
             {adapter.provider}
           </span>
           <span className="text-[10px] text-[hsl(var(--muted-foreground))]">v{adapter.version}</span>
         </div>
         <p className="mt-0.5 ml-6 text-xs text-[hsl(var(--muted-foreground))]">{adapter.description}</p>
-        {adapter.filePatterns.length > 0 && (
+        {!isComingSoon && adapter.filePatterns.length > 0 && (
           <div className="mt-1 ml-6 flex gap-1 flex-wrap">
             {adapter.filePatterns.map((pattern) => (
               <code
@@ -91,7 +101,7 @@ function CollectorCard({ adapter }: { adapter: AdapterInfo }) {
       </div>
 
       {/* Expanded: path editor or upload UI */}
-      {expanded && (
+      {expanded && !isComingSoon && (
         adapter.supportsUpload
           ? <UploadSection adapterId={adapter.id} />
           : <PathSection adapter={adapter} />
@@ -424,7 +434,11 @@ function UploadSection({ adapterId }: { adapterId: string }) {
 export default function ModulesPage() {
   const { modules, explorers, toggleModule, deleteModule, installModule, approveConsent, revokeConsent } = useModules();
   const { data: adapterData } = useSWR<{ adapters: AdapterInfo[] }>("/api/adapters", fetcher);
-  const adapters = adapterData?.adapters || [];
+  const adapters = (adapterData?.adapters || []).sort((a, b) => {
+    if (a.status === "stable" && b.status !== "stable") return -1;
+    if (a.status !== "stable" && b.status === "stable") return 1;
+    return a.name.localeCompare(b.name);
+  });
 
   const [tab, setTab] = useState<Tab>("collectors");
   const [search, setSearch] = useState("");

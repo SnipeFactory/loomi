@@ -22,6 +22,8 @@ export interface AdapterMetadata {
   capabilities: AdapterCapabilities;
   /** Upload-only adapter: no file watching, accepts ZIP via POST /api/upload/<id> */
   supportsUpload?: boolean;
+  /** Adapter status: stable, experimental, or coming-soon (hidden by default) */
+  status?: "stable" | "experimental" | "coming-soon";
 }
 
 export interface FileDetectionResult {

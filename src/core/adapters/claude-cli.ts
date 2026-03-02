@@ -21,6 +21,7 @@ export class ClaudeCliAdapter implements IAdapter {
       hasFileChanges: true,
       hasImageContent: false,
     },
+    status: "stable",
   };
 
   detectFile(filePath: string): FileDetectionResult {

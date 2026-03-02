@@ -1,8 +1,7 @@
 import fs from "fs";
 import path from "path";
-import type { IAdapter, AdapterMetadata, FileDetectionResult } from "../../src/core/adapters/types";
-import type { ParseResult, ParsedSession, ParsedMessage } from "../../src/core/parsers/types";
-import manifest from "./manifest.json";
+import type { IAdapter, AdapterMetadata, FileDetectionResult } from "./types";
+import type { ParseResult, ParsedSession, ParsedMessage } from "../parsers/types";
 
 interface GeminiMessage {
   id: string;
@@ -35,8 +34,25 @@ interface GeminiSession {
   messages: GeminiMessage[];
 }
 
-const adapter: IAdapter = {
-  metadata: manifest as AdapterMetadata,
+export class GeminiCliAdapter implements IAdapter {
+  readonly metadata: AdapterMetadata = {
+    id: "gemini-cli",
+    name: "Gemini CLI",
+    version: "1.0.0",
+    provider: "google",
+    description: "Collects Gemini CLI conversation logs (~/.gemini/tmp/*/chats/session-*.json).",
+    filePatterns: ["**/chats/session-*.json"],
+    defaultPaths: ["~/.gemini/tmp"],
+    capabilities: {
+      hasThinking: true,
+      hasCacheTokens: true,
+      hasToolUse: true,
+      hasCodeBlocks: true,
+      hasFileChanges: false,
+      hasImageContent: false,
+    },
+    status: "stable",
+  };
 
   detectFile(filePath: string): FileDetectionResult {
     const normalized = filePath.replace(/\\/g, "/");
@@ -54,12 +70,12 @@ const adapter: IAdapter = {
     }
 
     return { detected: false, confidence: 0 };
-  },
+  }
 
   parseLines(_lines: string[], _filePath: string): ParseResult {
     // Gemini CLI logs are single JSON files; use parseFile instead
     return { sessions: new Map(), messages: [] };
-  },
+  }
 
   async parseFile(filePath: string): Promise<ParseResult> {
     let raw: string;
@@ -111,7 +127,7 @@ const adapter: IAdapter = {
       sourceFilePath: filePath,
       title,
       provider: "google",
-      adapterVersion: manifest.version,
+      adapterVersion: this.metadata.version,
     };
 
     const sessionsMap = new Map<string, ParsedSession>();
@@ -175,7 +191,5 @@ const adapter: IAdapter = {
     }
 
     return { sessions: sessionsMap, messages: parsedMessages };
-  },
-};
-
-export default adapter;
+  }
+}

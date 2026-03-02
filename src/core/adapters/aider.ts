@@ -38,6 +38,7 @@ export class AiderAdapter implements IAdapter {
       hasFileChanges: true,
       hasImageContent: false,
     },
+    status: "coming-soon",
   };
 
   detectFile(filePath: string): FileDetectionResult {

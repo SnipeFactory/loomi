@@ -1,5 +1,5 @@
 import type { HookContext } from "../../src/core/modules/types";
-import { indexSession, indexAll, getIndexingStatus } from "../../src/core/api/memory";
+import { indexSession, indexAll, indexSessionSummary, getIndexingStatus } from "../../src/core/api/memory";
 import { tagSession } from "../../src/core/api/auto-tagger";
 
 let ctx: HookContext | null = null;
@@ -42,6 +42,16 @@ export const hooks = {
       if (count > 0) {
         ctx.logger.info(`Indexed ${count} message pairs for session ${payload.sessionUuid}`);
       }
+
+      // 3. Attempt session summary indexing after 5s delay
+      //    (log-summarizer must run first to write module_data)
+      const timer = setTimeout(async () => {
+        try {
+          const ok = await indexSessionSummary(payload.sessionId);
+          if (ok) ctx?.logger.info(`Indexed session summary for ${payload.sessionUuid}`);
+        } catch { /* no summary yet — will be indexed on next indexAll() */ }
+      }, 5_000);
+      timer.unref();
     } catch (err) {
       ctx.logger.error(`Failed to process session ${payload.sessionUuid}: ${err}`);
     }

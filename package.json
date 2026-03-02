@@ -3,13 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--max-old-space-size=4096' tsx watch server.ts",
-    "dev:clean": "rm -f .next/dev/lock && fuser -k 2000/tcp 2>/dev/null; NODE_OPTIONS='--max-old-space-size=4096' tsx watch server.ts",
+    "dev": "NODE_OPTIONS='--max-old-space-size=6144 --expose-gc' tsx watch server.ts",
+    "dev:clean": "rm -f .next/dev/lock && fuser -k 2000/tcp 2>/dev/null; NODE_OPTIONS='--max-old-space-size=6144 --expose-gc' tsx watch server.ts",
+    "dev:safe": "until NODE_OPTIONS='--max-old-space-size=6144 --expose-gc' tsx watch server.ts; do echo '[Loomi] Crashed — restarting in 3s...'; sleep 3; done",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' next build",
     "start": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=4096' tsx server.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "mcp-server": "NODE_OPTIONS='--max-old-space-size=4096' tsx src/mcp-server.ts"
+    "mcp-server": "NODE_OPTIONS='--max-old-space-size=4096' tsx src/mcp-server.ts",
+    "benchmark": "NODE_OPTIONS='--max-old-space-size=4096 --expose-gc' tsx scripts/benchmark.ts",
+    "demo:seed": "tsx scripts/seed-demo.ts",
+    "demo:rollback": "tsx scripts/rollback-demo.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -25,6 +29,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.1",
+    "franc": "^6.2.0",
     "lucide-react": "^0.575.0",
     "next": "^16.1.6",
     "postcss": "^8.5.6",

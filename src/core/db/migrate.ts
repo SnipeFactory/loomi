@@ -65,6 +65,7 @@ export async function runMigrations() {
     "ALTER TABLE messages ADD COLUMN content_blocks_json TEXT",
     "ALTER TABLE watched_paths ADD COLUMN module_id TEXT",
     "ALTER TABLE modules ADD COLUMN tier TEXT",
+    "ALTER TABLE sessions ADD COLUMN summary_indexed_at INTEGER",
   ];
   for (const ddl of alterColumns) {
     try { sqlite.exec(ddl); } catch { /* column already exists */ }
@@ -213,6 +214,9 @@ export async function runMigrations() {
   try { sqlite.exec("ALTER TABLE messages ADD COLUMN embedding_indexed_at INTEGER"); } catch { /* already exists */ }
   try { sqlite.exec("ALTER TABLE messages ADD COLUMN ml_indexed_at INTEGER"); } catch { /* already exists */ }
 
+  // Track exact model name used for indexing (enables re-index on model change)
+  try { sqlite.exec("ALTER TABLE messages ADD COLUMN embedding_model TEXT"); } catch { /* already exists */ }
+
   // Auto-cleanup both vec tables when source message is deleted
   sqlite.exec(`
     CREATE TRIGGER IF NOT EXISTS messages_delete_vec AFTER DELETE ON messages BEGIN
@@ -227,6 +231,33 @@ export async function runMigrations() {
 
   // Auto-tagging: store extracted concepts per session
   try { sqlite.exec("ALTER TABLE sessions ADD COLUMN session_tags TEXT"); } catch { /* already exists */ }
+
+  // ── Session-level Memory: vector + FTS for session summaries ──
+  // Single ML-model table (paraphrase-multilingual, 384d) — language-agnostic
+  sqlite.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS vec_session_summaries USING vec0(
+      id TEXT PRIMARY KEY,
+      embedding FLOAT[384]
+    );
+  `);
+
+  // Standalone FTS5 for session summaries (from log-summarizer)
+  sqlite.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(
+      session_uuid UNINDEXED,
+      summary,
+      keywords,
+      session_tags,
+      tokenize='unicode61 remove_diacritics 2'
+    );
+  `);
+
+  // Auto-cleanup vec_session_summaries when session is deleted
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS sessions_delete_vec_summary AFTER DELETE ON sessions BEGIN
+      DELETE FROM vec_session_summaries WHERE id = CAST(old.id AS TEXT);
+    END;
+  `);
 
   // ── Remove watcher modules (path registration now handled by adapter defaultPaths) ──
   const watcherIds = [

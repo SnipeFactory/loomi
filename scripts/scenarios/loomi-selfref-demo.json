@@ -1,0 +1,326 @@
+{
+  "_comment": "Loomi Self-Referential Demo — 실제 Loomi 개발 경험 기반",
+  "_story": "Loomi를 Loomi로 개발하는 실화. 3개의 독립 시나리오 (A/B/C). 각각 단독 시연 가능. 핵심: 실제 Loomi 개발 중 있었던 결정들을 MCP 검색으로 복원하는 장면.",
+  "_acts": {
+    "A": "OOM 크래시 → 기억에서 답 찾기 (임베딩 TTL)",
+    "B": "Gemini가 Claude 기억을 검색 (Cross-AI)",
+    "C": "신규 개발자 온보딩 — 왜 Module이고 Plugin이 아닌가"
+  },
+
+  "sessions": [
+
+    {
+      "_act": "A-BACKGROUND-1: 임베딩 모델 OOM 문제 첫 발견",
+      "_note": "실제 세션 380fa9e1 기반. 두 모델 동시 로드 → 5.8GB → Turbopack hang",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-opus-4-6",
+      "project": "/home/jch/workspace/loomi",
+      "gitBranch": "main",
+      "daysAgo": 4,
+      "durationMinutes": 45,
+      "tags": ["embedding", "onnx", "memory", "oom", "turbopack"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "서버가 또 죽었어. 이번엔 다른 에러야:\n\nFATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory\n\n[Loomi] Synced 16 entries from /home/jch/.gemini/tmp/loomi/chats/session-2026-03-01T15-00-53338689.json\n\n임베딩 인덱싱 중에 터지는 것 같은데."
+        },
+        {
+          "role": "assistant",
+          "text": "OOM 원인을 파악합니다. 로그에서 Synced → 인덱싱 시작 직후 터지는 패턴이 명확합니다.",
+          "inputTokens": 420,
+          "outputTokens": 180,
+          "tools": [
+            { "name": "Read", "input": { "path": "src/core/embeddings/index.ts" } },
+            { "name": "Read", "input": { "path": "modules/episodic-memory/index.ts" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "뭐가 문제야?"
+        },
+        {
+          "role": "assistant",
+          "text": "근본 원인 확인:\n\n현재 두 임베딩 모델이 **서버 전체 생명주기 동안 메모리에 상주**하고 있습니다:\n\n- `all-MiniLM-L6-v2` (EN) → ~2.4GB\n- `paraphrase-multilingual-MiniLM-L12-v2` (ML) → ~3.4GB\n\n합계 **~5.8GB**. 여기에 Turbopack 컴파일러가 메모리 스파이크를 일으키면 OS의 OOM killer가 프로세스를 종료합니다.\n\n특히 `indexAll()`이 대량 메시지를 배치 처리할 때 peak 사용량이 더 높아집니다.\n\n**해결 방향:**\n1. ML 모델 하나로 통합 (multilingual은 영어도 잘 처리)\n2. TTL 기반 자동 unload — 10분 미사용 시 dispose, 요청 시 재로드\n3. IPC 기반 워커 프로세스 분리 (장기적)",
+          "inputTokens": 1800,
+          "outputTokens": 2400,
+          "cacheReadTokens": 1200
+        },
+        {
+          "role": "user",
+          "text": "TTL 방식으로 가자. 얼마나 효과가 있을 것 같아?"
+        },
+        {
+          "role": "assistant",
+          "text": "메모리 효과 예측:\n\n| 상황 | 현재 | TTL 적용 후 |\n|------|------|------------|\n| 유휴 (10분 경과) | ~5.8GB | **~0.5GB** |\n| 검색/인덱싱 중 | ~5.8GB | ~2.4GB (ML 1개만) |\n| 절감 | — | **~3.4GB** |\n\n`disposeEmbeddings()`는 이미 선언되어 있지만 아무도 호출 안 하고 있습니다. TTL 타이머로 자동화하면 됩니다.\n\n구현 들어갑니다.",
+          "inputTokens": 2200,
+          "outputTokens": 1800,
+          "cacheReadTokens": 1800
+        }
+      ]
+    },
+
+    {
+      "_act": "A-BACKGROUND-2: TTL 임베딩 + franc 언어 감지 구현",
+      "_note": "실제 세션 380fa9e1 후반부 기반. franc sco/eng 오분류 수정",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "project": "/home/jch/workspace/loomi",
+      "gitBranch": "feat/embedding-ttl",
+      "daysAgo": 3,
+      "durationMinutes": 60,
+      "tags": ["embedding", "ttl", "franc", "language-detection", "model-selector"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "TTL은 됐는데 언어 감지가 이상해. franc이 영어 문장을 sco(스코틀랜드어)로 잘못 분류함:\n\n`sco (score: 1.0) > eng (score: 0.949)` → 'What is the best embedding model for English text'\n\n이러면 EN 쿼리가 ML 모델로 가버려."
+        },
+        {
+          "role": "assistant",
+          "text": "franc의 알려진 한계입니다. sco(Scottish)와 eng(English)는 어휘가 거의 겹쳐서 혼동합니다.\n\n실제 점수 패턴:\n```\nsco: 1.0\neng: 0.949 ← 상위 1위의 95%\nnob: 0.79\n```\n\n**수정 전략:** `languageModelMap`에 설정된 언어들 중, 상위 점수의 85% 이상이면 우선 채택합니다.\n\n`sco` 대신 `eng`(0.949 / 1.0 = 94.9% ≥ 85%) → `eng` 선택됩니다.\n\n```typescript\n// detectLanguage() 수정\nif (configuredLanguages && configuredLanguages.length > 0) {\n  const match = results.find(([lang, score]) =>\n    configuredLanguages.includes(lang) && score >= topScore * 0.85\n  );\n  if (match) return match[0];\n}\n```",
+          "inputTokens": 1400,
+          "outputTokens": 2200,
+          "cacheReadTokens": 800,
+          "tools": [
+            { "name": "Edit", "input": { "path": "src/core/embeddings/model-selector.ts" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "[tool_result] kor (script) → 임베딩 모델 최적화 메모리 관리\neng (configured match) → What is the best embedding model for English text\neng (configured match) → How do I implement TTL-based auto-unload in Node.js"
+        },
+        {
+          "role": "assistant",
+          "text": "모든 케이스 정확히 분류됩니다:\n\n| 텍스트 | 감지 | 방식 |\n|--------|------|------|\n| 한국어 (Hangul) | `kor` | script fast path |\n| 'What is the best...' | `eng` | configured match (94.9%) |\n| 'How to implement TTL...' | `eng` | configured match |\n\n**핵심 설계 결정 요약:**\n- 한글/CJK/아랍어/키릴 → script 감지 (오분류 없음, 즉각)\n- 라틴 문자 → franc + 설정된 언어 우선 매칭 (85% threshold)\n- 설정 언어 미매칭 → franc 상위 결과 (confidence ≥ 0.7) 또는 기본 모델",
+          "inputTokens": 2800,
+          "outputTokens": 1600,
+          "cacheReadTokens": 2400
+        },
+        {
+          "role": "user",
+          "text": "성능은?"
+        },
+        {
+          "role": "assistant",
+          "text": "벤치마크 결과:\n\n```\nfrancAll avg: 0.452ms / call\nfrancAll total for 8,591 msgs: 3.88s\nDB query avg: 0.004ms / call\nImport (첫 로드): 22.77ms / 이후 캐시: 0.005ms\n```\n\n**결론:** 전체 메시지 재인덱싱 기준 언어 감지 비용은 **3.88초**. 임베딩 생성(~38ms/msg) 대비 1/10 수준으로 병목이 아닙니다.\n\nTTL + franc 수정 완료. 배포 준비.",
+          "inputTokens": 3200,
+          "outputTokens": 1200,
+          "cacheReadTokens": 2800
+        }
+      ]
+    },
+
+    {
+      "_act": "A-TODAY: 또 OOM — 하지만 이번엔 Loomi가 기억한다",
+      "_note": "데모 핵심 장면. Worker 분리 후 새 OOM 발생 시 Loomi 검색으로 해결",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "project": "/home/jch/workspace/loomi",
+      "gitBranch": "feat/worker-separation",
+      "daysAgo": 0,
+      "durationMinutes": 8,
+      "tags": ["oom", "embedding", "worker", "memory"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "Turbopack 올리고 나서 또 메모리 문제가 생겼어. ONNX 워커 프로세스를 아예 분리하는 방향으로 가려는데, 예전에 임베딩 메모리 문제 해결했을 때 어떤 결정들 했었지?"
+        },
+        {
+          "role": "assistant",
+          "text": "Loomi 에피소딕 메모리에서 검색합니다.",
+          "inputTokens": 280,
+          "outputTokens": 80,
+          "tools": [
+            { "name": "mcp__loomi-memory__search", "input": { "query": ["임베딩 메모리 OOM TTL", "embedding model unload memory optimization"] } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "[search result] sessionUuid: 380fa9e1\ntitle: '임베딩 메모리 최적화 — TTL 기반 자동 unload'\nuserText: 'TTL 방식으로 가자. 얼마나 효과가 있을 것 같아?'\nassistantText: '유휴 5.8GB → 0.5GB. disposeEmbeddings()는 이미 선언되어 있지만 아무도 호출 안 함...'"
+        },
+        {
+          "role": "assistant",
+          "text": "찾았습니다. 3일 전 세션(`380fa9e1`)에서 결정한 내용:\n\n**당시 결론:**\n1. TTL 10분 → `disposeEmbeddings()` 자동 호출 ✅ 구현 완료\n2. franc `sco/eng` 오분류 → 85% threshold로 해결 ✅\n3. 장기 방향: **IPC 기반 워커 프로세스 분리** ← 지금 하려는 게 바로 이것\n\n당시에 이미 워커 분리를 '장기 방향'으로 명시해뒀습니다. TTL로 임시 해결 → 지금 근본 해결책 구현하는 자연스러운 흐름입니다.\n\n`child_process.fork()` + IPC 설계 시작할까요?",
+          "inputTokens": 1200,
+          "outputTokens": 1800,
+          "cacheReadTokens": 600
+        }
+      ]
+    },
+
+    {
+      "_act": "B-BACKGROUND: Claude CLI로 언어 감지 + 모델 선택 설계",
+      "_note": "Gemini가 나중에 MCP로 이 세션을 찾는 시나리오의 배경",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "project": "/home/jch/workspace/loomi",
+      "gitBranch": "feat/multilingual-embedding",
+      "daysAgo": 5,
+      "durationMinutes": 40,
+      "tags": ["embedding", "language-detection", "franc", "model-selector", "multilingual"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "한국어 대화는 multilingual 모델로, 영어 대화는 EN 모델로 자동 라우팅하고 싶어. 언어 감지는 어떻게 할 거야?"
+        },
+        {
+          "role": "assistant",
+          "text": "`franc` 라이브러리를 쓰되 두 단계로 접근합니다:\n\n**Stage 1 - Script 감지 (즉각, 오분류 없음):**\n```typescript\nif (/[\\uAC00-\\uD7AF]/.test(text)) return 'kor'; // Hangul\nif (/[\\u3040-\\u30FF]/.test(text)) return 'jpn'; // Hiragana/Katakana\nif (/[\\u0600-\\u06FF]/.test(text)) return 'ara'; // Arabic\n```\n\n**Stage 2 - francAll (라틴 문자):**\n- 설정된 언어(`languageModelMap` 키)를 우선 매칭\n- 상위 점수의 85% 이상이면 채택 (sco/eng 혼동 방지)\n\n**언어 → 모델 매핑** (`module_settings`에 저장):\n```json\n{\n  \"kor\": \"Xenova/paraphrase-multilingual-MiniLM-L12-v2\",\n  \"eng\": \"Xenova/all-MiniLM-L6-v2\"\n}\n```",
+          "inputTokens": 680,
+          "outputTokens": 2800,
+          "cacheReadTokens": 320,
+          "tools": [
+            { "name": "Write", "input": { "path": "src/core/embeddings/model-selector.ts" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "그럼 settingsSchema에도 이 설정이 노출되어야 하겠네."
+        },
+        {
+          "role": "assistant",
+          "text": "맞습니다. `episodic-memory` 모듈 manifest에 settingsSchema를 추가합니다:\n\n```json\n{\n  \"settingsSchema\": [\n    {\n      \"key\": \"defaultModel\",\n      \"type\": \"select\",\n      \"label\": \"Default Embedding Model\",\n      \"default\": \"Xenova/paraphrase-multilingual-MiniLM-L12-v2\",\n      \"options\": [\n        { \"label\": \"Multilingual (Korean/English/50+)\", \"value\": \"Xenova/paraphrase-multilingual-MiniLM-L12-v2\" },\n        { \"label\": \"English-optimized (faster)\", \"value\": \"Xenova/all-MiniLM-L6-v2\" }\n      ]\n    },\n    {\n      \"key\": \"languageModelMap\",\n      \"type\": \"json\",\n      \"label\": \"Language → Model Map (ISO 639-3)\",\n      \"default\": \"{\\\"kor\\\":\\\"Xenova/paraphrase-multilingual-MiniLM-L12-v2\\\",\\\"eng\\\":\\\"Xenova/all-MiniLM-L6-v2\\\"}\"\n    }\n  ]\n}\n```\n\nUI에서 JSON textarea로 렌더링됩니다. 모듈 설정 페이지에서 언어별 모델을 직접 편집 가능.",
+          "inputTokens": 1800,
+          "outputTokens": 2200,
+          "cacheReadTokens": 1400,
+          "tools": [
+            { "name": "Edit", "input": { "path": "modules/episodic-memory/manifest.json" } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "_act": "B-TODAY: Gemini에서 Claude 기억 검색 (Cross-AI 핵심 장면)",
+      "_note": "실제 세션 8759bb0c 기반. Gemini가 Loomi MCP로 Claude 세션 찾음",
+      "tool": "gemini-cli",
+      "provider": "google",
+      "model": "gemini-2.5-pro",
+      "project": "/home/jch/workspace/loomi",
+      "gitBranch": "main",
+      "daysAgo": 0,
+      "durationMinutes": 5,
+      "tags": ["mcp", "episodic-memory", "cross-ai", "language-detection"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "루미 메모리 상태 알려줘"
+        },
+        {
+          "role": "assistant",
+          "text": "Loomi 에피소딕 메모리 상태를 확인합니다.",
+          "tools": [
+            { "name": "mcp__loomi-memory__status", "input": {} }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "[status result] totalMessages: 9194 / indexed: 9194 / pending: 0"
+        },
+        {
+          "role": "assistant",
+          "text": "루미의 에피소딕 메모리 상태:\n\n- **전체 메시지:** 9,194개\n- **인덱싱 완료:** 9,194개 ✅\n- **대기 중:** 0개\n\n**99.99% 색인 완료** — 모든 과거 대화를 검색할 수 있습니다."
+        },
+        {
+          "role": "user",
+          "text": "언어 감지 로직이 어떻게 구현됐는지 기억 못해. Claude랑 얘기했던 거 같은데 찾아봐줘"
+        },
+        {
+          "role": "assistant",
+          "text": "과거 대화에서 검색합니다.",
+          "tools": [
+            { "name": "mcp__loomi-memory__search", "input": { "query": "언어 감지 franc 모델 선택 로직" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "[search result] score: 0.94 | source: vector-ml\nsessionTitle: 'multilingual embedding 언어 감지 설계'\nprojectPath: /home/jch/workspace/loomi\nuserText: '한국어는 multilingual 모델로, 영어는 EN 모델로 자동 라우팅하고 싶어'\nassistantText: 'franc 라이브러리를 쓰되 두 단계로... Stage 1 Script 감지, Stage 2 francAll 85% threshold...'"
+        },
+        {
+          "role": "assistant",
+          "text": "찾았습니다. Claude와 5일 전 대화한 내용입니다 (Claude CLI 세션):\n\n**언어 감지 구현 결정:**\n\n1. **Script 감지** (Hangul/CJK/Arabic/Cyrillic) → 즉각, 오분류 없음\n2. **francAll + 85% threshold** → 라틴 문자에서 `sco`/`eng` 혼동 방지\n3. **설정 가능** → `module_settings`의 `languageModelMap` (ISO 639-3 → 모델명)\n\n**핵심 설계 이유:** franc 단독으로는 'What is the best...' 같은 일반 영어를 `sco`(스코틀랜드어)로 오분류함. 85% threshold를 두면 `eng`(0.949) ≥ `sco`(1.0) × 0.85 = 0.85 → `eng` 선택.\n\n이 대화는 Claude CLI에서 이뤄진 세션이지만, Loomi가 수집해서 저도 검색할 수 있습니다."
+        }
+      ]
+    },
+
+    {
+      "_act": "C-BACKGROUND: Plugin → Module 리네이밍 결정",
+      "_note": "실제 세션 f116f3f6 기반. 용어 혼동 문제 → 전체 리네이밍 결정",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "project": "/home/jch/workspace/loomi",
+      "gitBranch": "refactor/plugin-to-module",
+      "daysAgo": 14,
+      "durationMinutes": 90,
+      "tags": ["refactoring", "naming", "module", "plugin", "architecture"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "문제가 생겼어. 내부적으로 'Plugin'이라고 부르는데, 사람들이 'Claude Code 플러그인'이랑 헷갈려해. Loomi 내부 확장 시스템은 뭐라고 불러야 해?"
+        },
+        {
+          "role": "assistant",
+          "text": "용어 충돌 분석:\n\n- **Claude Code 플러그인** = Claude Code 공식 확장 시스템 (외부, Anthropic 정의)\n- **Loomi Plugin** = Loomi 내부 서버사이드 확장 (내부, 우리가 만든 것)\n\n혼동이 발생하는 이유: 같은 단어 'Plugin'이 두 개의 다른 시스템을 가리킴.\n\n**추천: `Module`**로 리네이밍\n\n이유:\n1. `Module`은 충분히 구체적이고 기술적으로 정확함\n2. 다른 유명 프레임워크들(Nuxt, NestJS)도 서버사이드 확장을 'Module'이라 부름\n3. Claude Code 생태계와 명확히 구분됨\n\n전체 범위: DB 4개 테이블, 타입 13개, 컴포넌트 6개, API 라우트 7개, path alias 1개. 약 200+ 파일 변경 예상.",
+          "inputTokens": 680,
+          "outputTokens": 2400,
+          "cacheReadTokens": 280
+        },
+        {
+          "role": "user",
+          "text": "ㅇㅋ. 그냥 Module로 가자. 전부 다 바꿔."
+        },
+        {
+          "role": "assistant",
+          "text": "전체 리네이밍 8단계로 진행합니다:\n\n1. DB 스키마: `plugins` → `modules`, `plugin_*` → `module_*` (4개 테이블)\n2. 타입 시스템: `Plugin*` → `Module*`, `pluginId` → `moduleId` (13개 타입)\n3. 디렉토리 이동: `src/core/plugins/` → `src/core/modules/`\n4. 파일명: `plugin-*.ts` → `module-*.ts`\n5. API 라우트: `/api/plugins` → `/api/modules`\n6. Path alias: `@plugins/*` → `@modules/*`\n7. 한글 문서: '플러그인' → '모듈'\n8. 커스텀 커맨드: `/new-plugin` → `/new-module`\n\n**보존:** 외부 'Claude Code 플러그인' 개념 언급은 그대로 유지 (혼동 방지를 위해 의도적으로 구분)",
+          "inputTokens": 2200,
+          "outputTokens": 3200,
+          "cacheReadTokens": 1800,
+          "tools": [
+            { "name": "Bash", "input": { "command": "git mv src/core/plugins src/core/modules" } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "_act": "C-TODAY: 신규 개발자 온보딩 — 왜 Module?",
+      "_note": "새 컨트리뷰터가 아키텍처 이해를 위해 Loomi 검색",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "project": "/home/jch/workspace/loomi",
+      "gitBranch": "feat/new-contributor",
+      "daysAgo": 0,
+      "durationMinutes": 4,
+      "tags": ["onboarding", "architecture", "naming", "module"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "Loomi 코드 보니까 확장 시스템이 'Module'이라고 되어 있는데, 보통 이런 건 Plugin이라고 하잖아. 왜 Module인지 설명이 없어서."
+        },
+        {
+          "role": "assistant",
+          "text": "Loomi 과거 결정 이력을 검색합니다.",
+          "inputTokens": 240,
+          "outputTokens": 60,
+          "tools": [
+            { "name": "mcp__loomi-memory__search", "input": { "query": "plugin module 리네이밍 이유 naming decision" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "[search result] score: 0.91\nsessionTitle: 'Plugin → Module 전체 리네이밍'\nuserText: '문제가 생겼어. 내부적으로 Plugin이라고 부르는데 사람들이 Claude Code 플러그인이랑 헷갈려해'\nassistantText: 'Claude Code Plugin = 외부 Anthropic 공식 시스템. Loomi Plugin = 내부 서버사이드 확장. 같은 단어가 두 개의 다른 시스템을... Module 추천 이유: Nuxt/NestJS도 서버사이드를 Module이라 부름'"
+        },
+        {
+          "role": "assistant",
+          "text": "결정 이력 찾았습니다 (2주 전 세션):\n\n**'Module'로 바꾼 이유:**\n\n'Plugin'이라는 단어가 충돌을 일으켰습니다:\n- **Claude Code 플러그인** = Anthropic 공식 외부 확장 시스템\n- **Loomi Plugin** = Loomi 내부 서버사이드 확장\n\n같은 단어가 두 개의 다른 시스템을 가리켜 혼동이 발생했고, `Module`이 더 정확하다는 결론:\n- Nuxt, NestJS 등 주요 프레임워크도 서버사이드 확장을 'Module'이라 부름\n- Claude Code 생태계와 명확히 구분됨\n\nCLAUDE.md에도 명시: 외부 'Claude Code 플러그인' 개념은 여전히 'Plugin'으로 표기하고, Loomi 내부만 'Module'로 사용합니다."
+        }
+      ]
+    }
+
+  ]
+}

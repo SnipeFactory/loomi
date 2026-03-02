@@ -90,6 +90,14 @@ export function ModuleSettingsDialog({ moduleId, manifestJson, onClose }: Module
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
+                ) : field.type === "json" ? (
+                  <textarea
+                    value={typeof values[field.key] === "string" ? values[field.key] : JSON.stringify(values[field.key], null, 2)}
+                    onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+                    rows={4}
+                    spellCheck={false}
+                    className="mt-1 w-full rounded-md bg-[hsl(var(--muted))] px-2 py-1.5 text-xs text-[hsl(var(--foreground))] font-mono focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] resize-y"
+                  />
                 ) : (
                   <input
                     type={field.type === "number" ? "number" : "text"}

@@ -48,6 +48,7 @@ export const sessions = sqliteTable(
     adapterVersion: text("adapter_version"),
     metadataJson: text("metadata_json"),
     sessionTags: text("session_tags"),  // JSON string[] — auto-tagged concepts
+    summaryIndexedAt: integer("summary_indexed_at"), // epoch ms when session summary was indexed
   },
   (table) => [
     index("idx_sessions_project").on(table.projectPath),
@@ -84,6 +85,7 @@ export const messages = sqliteTable(
     sortOrder: integer("sort_order").notNull().default(0),
     provider: text("provider"),
     contentBlocksJson: text("content_blocks_json"),
+    embeddingModel: text("embedding_model"), // exact model name used for indexing (e.g. "Xenova/all-MiniLM-L6-v2")
   },
   (table) => [
     index("idx_messages_session").on(table.sessionId),

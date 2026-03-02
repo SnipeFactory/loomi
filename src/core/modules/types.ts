@@ -31,7 +31,7 @@ export type ModuleRuntime = "server" | "client" | "both";
 
 export interface ModuleSettingsField {
   key: string;
-  type: "string" | "number" | "boolean" | "select";
+  type: "string" | "number" | "boolean" | "select" | "json";
   label: string;
   default?: unknown;
   options?: { label: string; value: string }[];

@@ -1,0 +1,379 @@
+{
+  "_comment": "Loomi Master Demo Scenario — 'The Bridge of AI Memories'",
+  "_story": "A developer builds a Next.js SaaS app over one week, alternating between Claude CLI and Gemini CLI. The KEY session is Day 7 (Gemini, JWT security) — this is what gets found in Act 2 of the demo via MCP search.",
+  "sessions": [
+
+    {
+      "_act": "BACKGROUND — Day 8 (oldest)",
+      "tool": "gemini-cli",
+      "provider": "google",
+      "model": "gemini-2.0-flash",
+      "project": "/home/user/saas-starter",
+      "gitBranch": "main",
+      "daysAgo": 8,
+      "durationMinutes": 35,
+      "tags": ["database", "schema", "postgresql", "users"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "I'm starting a new SaaS project with Next.js and PostgreSQL. Can you help me design the database schema for user authentication — users, sessions, and refresh tokens?"
+        },
+        {
+          "role": "assistant",
+          "text": "Sure! Here's a solid schema for a SaaS auth system:\n\n```sql\nCREATE TABLE users (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  email TEXT UNIQUE NOT NULL,\n  password_hash TEXT NOT NULL,\n  email_verified BOOLEAN DEFAULT false,\n  created_at TIMESTAMPTZ DEFAULT now(),\n  updated_at TIMESTAMPTZ DEFAULT now()\n);\n\nCREATE TABLE sessions (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  refresh_token_hash TEXT NOT NULL,\n  user_agent TEXT,\n  ip_address TEXT,\n  expires_at TIMESTAMPTZ NOT NULL,\n  created_at TIMESTAMPTZ DEFAULT now()\n);\n\nCREATE INDEX idx_sessions_user ON sessions(user_id);\nCREATE INDEX idx_sessions_expires ON sessions(expires_at);\n```\n\nKey decisions:\n- Store only the **hash** of the refresh token (never the raw value)\n- Sessions table enables multi-device support and revocation\n- Index on `expires_at` for efficient cleanup jobs",
+          "inputTokens": 380,
+          "outputTokens": 2100
+        },
+        {
+          "role": "user",
+          "text": "Should I use a separate table for access tokens or just keep them stateless as JWTs?"
+        },
+        {
+          "role": "assistant",
+          "text": "Keep access tokens as **stateless JWTs** — that's the right call for most SaaS apps.\n\n**Why stateless JWTs for access tokens:**\n- No DB lookup on every authenticated request (huge performance win)\n- Scales horizontally without shared state\n- Short expiry (15 min) limits the blast radius of a leaked token\n\n**Only store refresh tokens in DB** — they're long-lived (7–30 days) and need to be revocable.\n\nYour flow:\n```\nLogin → issue access_token (JWT, 15min) + refresh_token (opaque, 7 days, stored hashed in sessions table)\nEvery request → verify access_token signature only (no DB hit)\nOn 401 → client calls /api/auth/refresh with refresh_token → new access_token issued\n```\n\nThis is the pattern used by Auth.js, Clerk, and most production auth systems.",
+          "inputTokens": 850,
+          "outputTokens": 1800
+        }
+      ]
+    },
+
+    {
+      "_act": "BACKGROUND — Day 7 (THE KEY SESSION for Act 2 MCP search)",
+      "tool": "gemini-cli",
+      "provider": "google",
+      "model": "gemini-2.0-flash",
+      "project": "/home/user/saas-starter",
+      "gitBranch": "feat/auth",
+      "daysAgo": 7,
+      "durationMinutes": 42,
+      "tags": ["security", "auth", "jwt", "cookies", "refresh-token"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "What are the best practices for storing JWT refresh tokens in the browser? I want to make sure we're secure against XSS and CSRF."
+        },
+        {
+          "role": "assistant",
+          "text": "Here are the industry-standard best practices for storing JWT refresh tokens securely:\n\n## Cookie Configuration (non-negotiable)\n\nUse an `HttpOnly` cookie — this is the single most important setting:\n\n```typescript\n// pages/api/auth/login.ts (or app/api/auth/login/route.ts)\nres.setHeader('Set-Cookie', [\n  `refresh_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age=${7 * 24 * 3600}`\n]);\n```\n\n**Why each attribute matters:**\n- `HttpOnly` — JavaScript cannot read the cookie at all, blocking XSS token theft\n- `Secure` — cookie only transmitted over HTTPS, prevents man-in-the-middle interception\n- `SameSite=Strict` — cookie not sent on cross-site requests, neutralizes CSRF attacks\n- `Path=/api/auth` — scope cookie to only the refresh endpoint, reduces exposure surface\n\n## Additional Hardening\n\n1. **Refresh token rotation** — issue a new refresh token on every use, invalidate the old one. Detects token theft via reuse detection.\n2. **Short-lived access tokens** — 15 minutes max. Even if stolen, they expire quickly.\n3. **Absolute expiry** — refresh tokens must have a hard expiry (7–30 days), regardless of activity.\n4. **HTTPS only** — never transmit tokens over HTTP in production.\n\n## What NOT to do\n- ❌ `localStorage` or `sessionStorage` — both accessible to JavaScript, vulnerable to XSS\n- ❌ `SameSite=None` without Secure — exposes to cross-site attacks\n- ❌ Long-lived access tokens — defeats the purpose of short expiry",
+          "inputTokens": 420,
+          "outputTokens": 2800,
+          "cacheReadTokens": 350
+        },
+        {
+          "role": "user",
+          "text": "So the final config is: HttpOnly, Secure, SameSite=Strict, Path=/api/auth — right? And rotate on every refresh?"
+        },
+        {
+          "role": "assistant",
+          "text": "Exactly. To confirm the final security configuration decision:\n\n**Refresh Token Cookie Settings:**\n- `HttpOnly: true` — no JS access\n- `Secure: true` — HTTPS only\n- `SameSite=Strict` — blocks CSRF\n- `Path=/api/auth` — scoped endpoint only\n- `Max-Age: 604800` — 7-day expiry\n\n**Token Rotation:** Yes, rotate on every use. The pattern:\n```\n1. Client sends refresh_token via cookie to POST /api/auth/refresh\n2. Server verifies token hash matches sessions table\n3. Server deletes the old session record\n4. Server issues new access_token + new refresh_token\n5. Old refresh_token is now invalid — reuse attempt triggers account lock\n```\n\nThis is the configuration I'd ship to production. Lock it in.",
+          "inputTokens": 1200,
+          "outputTokens": 1600,
+          "cacheReadTokens": 800
+        },
+        {
+          "role": "user",
+          "text": "Perfect. One last thing — should we set a CSRF token as well even with SameSite=Strict?"
+        },
+        {
+          "role": "assistant",
+          "text": "With `SameSite=Strict`, a separate CSRF token is **not necessary** for modern browsers (Chrome 80+, Firefox 79+, Safari 16.4+).\n\nHowever, if you need to support older browsers or have a specific compliance requirement (e.g., PCI-DSS), add a Double Submit Cookie as a lightweight CSRF layer:\n\n```typescript\n// Generate on login, verify on state-changing requests\nconst csrfToken = crypto.randomBytes(32).toString('hex');\n// Send as non-HttpOnly cookie (JS needs to read it) + require it in X-CSRF-Token header\n```\n\nFor most SaaS apps: **skip it**. `SameSite=Strict` covers you, and adding CSRF tokens introduces complexity without meaningful security gain in 2025.",
+          "inputTokens": 1800,
+          "outputTokens": 1400
+        }
+      ]
+    },
+
+    {
+      "_act": "BACKGROUND — Day 6",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "project": "/home/user/saas-starter",
+      "gitBranch": "feat/auth",
+      "daysAgo": 6,
+      "durationMinutes": 55,
+      "tags": ["auth", "middleware", "nextjs", "jwt"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "Help me implement the auth middleware in Next.js 15. It should verify the JWT access token on every protected route."
+        },
+        {
+          "role": "assistant",
+          "text": "I'll implement the auth middleware using Next.js 15's built-in `middleware.ts`. Let me check your current project structure first.",
+          "inputTokens": 310,
+          "outputTokens": 180,
+          "tools": [
+            { "name": "glob", "input": { "pattern": "src/**/*.ts", "description": "find existing auth files" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "Found the structure. Here's what I have: src/app, src/lib/auth.ts with jose for JWT verification."
+        },
+        {
+          "role": "assistant",
+          "text": "Perfect, I'll build on your `jose` setup. Here's the middleware:\n\n```typescript\n// middleware.ts (project root)\nimport { NextRequest, NextResponse } from 'next/server';\nimport { jwtVerify } from 'jose';\n\nconst PUBLIC_ROUTES = ['/', '/login', '/signup', '/api/auth/login', '/api/auth/refresh'];\nconst JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);\n\nexport async function middleware(req: NextRequest) {\n  const { pathname } = req.nextUrl;\n\n  if (PUBLIC_ROUTES.some(route => pathname.startsWith(route))) {\n    return NextResponse.next();\n  }\n\n  const token = req.headers.get('Authorization')?.replace('Bearer ', '');\n  if (!token) {\n    return NextResponse.redirect(new URL('/login', req.url));\n  }\n\n  try {\n    const { payload } = await jwtVerify(token, JWT_SECRET);\n    const requestHeaders = new Headers(req.headers);\n    requestHeaders.set('x-user-id', payload.sub as string);\n    return NextResponse.next({ request: { headers: requestHeaders } });\n  } catch {\n    return NextResponse.redirect(new URL('/login', req.url));\n  }\n}\n\nexport const config = {\n  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],\n};\n```",
+          "inputTokens": 1200,
+          "outputTokens": 3200,
+          "cacheReadTokens": 600,
+          "tools": [
+            { "name": "write_file", "input": { "path": "middleware.ts" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "What about the /api/auth/refresh endpoint itself?"
+        },
+        {
+          "role": "assistant",
+          "text": "Here's the refresh endpoint that reads the HttpOnly cookie and rotates the token:\n\n```typescript\n// app/api/auth/refresh/route.ts\nimport { cookies } from 'next/headers';\nimport { SignJWT } from 'jose';\nimport { db } from '@/lib/db';\nimport { sessions } from '@/lib/schema';\nimport { eq } from 'drizzle-orm';\nimport crypto from 'crypto';\n\nexport async function POST() {\n  const cookieStore = await cookies();\n  const refreshToken = cookieStore.get('refresh_token')?.value;\n\n  if (!refreshToken) {\n    return Response.json({ error: 'No refresh token' }, { status: 401 });\n  }\n\n  const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');\n  const session = await db.select().from(sessions)\n    .where(eq(sessions.refreshTokenHash, tokenHash)).get();\n\n  if (!session || session.expiresAt < new Date()) {\n    return Response.json({ error: 'Invalid or expired session' }, { status: 401 });\n  }\n\n  // Rotate: delete old, create new\n  await db.delete(sessions).where(eq(sessions.id, session.id));\n  const newRefreshToken = crypto.randomBytes(64).toString('hex');\n  // ... create new session, issue new JWT\n}\n```",
+          "inputTokens": 2800,
+          "outputTokens": 4100,
+          "cacheReadTokens": 1800,
+          "cacheCreationTokens": 500
+        }
+      ]
+    },
+
+    {
+      "_act": "BACKGROUND — Day 5",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "project": "/home/user/saas-starter",
+      "gitBranch": "feat/auth",
+      "daysAgo": 5,
+      "durationMinutes": 40,
+      "tags": ["auth", "login-form", "react", "shadcn"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "Build the login and signup pages using shadcn/ui. Forms should use react-hook-form with zod validation."
+        },
+        {
+          "role": "assistant",
+          "text": "I'll set up the login/signup pages with shadcn, react-hook-form, and zod. Let me scaffold both forms.",
+          "inputTokens": 420,
+          "outputTokens": 220,
+          "tools": [
+            { "name": "bash", "input": { "command": "npx shadcn@latest add form input button card label" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "Components added. Build the forms now."
+        },
+        {
+          "role": "assistant",
+          "text": "Here's the login form with full validation:\n\n```tsx\n// components/auth/login-form.tsx\n'use client';\nimport { useForm } from 'react-hook-form';\nimport { zodResolver } from '@hookform/resolvers/zod';\nimport { z } from 'zod';\nimport { Button } from '@/components/ui/button';\nimport { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';\nimport { Input } from '@/components/ui/input';\n\nconst loginSchema = z.object({\n  email: z.string().email('Invalid email address'),\n  password: z.string().min(8, 'Password must be at least 8 characters'),\n});\n\ntype LoginValues = z.infer<typeof loginSchema>;\n\nexport function LoginForm() {\n  const form = useForm<LoginValues>({\n    resolver: zodResolver(loginSchema),\n    defaultValues: { email: '', password: '' },\n  });\n\n  async function onSubmit(values: LoginValues) {\n    const res = await fetch('/api/auth/login', {\n      method: 'POST',\n      body: JSON.stringify(values),\n    });\n    if (res.ok) {\n      window.location.href = '/dashboard';\n    }\n  }\n  // ...\n}\n```",
+          "inputTokens": 1800,
+          "outputTokens": 3800,
+          "cacheReadTokens": 1200,
+          "tools": [
+            { "name": "write_file", "input": { "path": "components/auth/login-form.tsx" } },
+            { "name": "write_file", "input": { "path": "app/login/page.tsx" } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "_act": "BACKGROUND — Day 4",
+      "tool": "gemini-cli",
+      "provider": "google",
+      "model": "gemini-2.0-flash",
+      "project": "/home/user/saas-starter",
+      "gitBranch": "feat/dashboard",
+      "daysAgo": 4,
+      "durationMinutes": 30,
+      "tags": ["dashboard", "react", "ui", "data-fetching"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "The auth is done. Now help me design the dashboard layout — sidebar nav, top header with user info, and a main content area."
+        },
+        {
+          "role": "assistant",
+          "text": "For a SaaS dashboard, I'd recommend this layout structure:\n\n```\n┌─────────────────────────────────┐\n│ Header: Logo | Search | User    │\n├──────────┬──────────────────────┤\n│ Sidebar  │                      │\n│ - Home   │   Main Content Area  │\n│ - Users  │                      │\n│ - Billing│   (page-specific)    │\n│ - Settings│                     │\n└──────────┴──────────────────────┘\n```\n\nUsing Next.js App Router with a shared layout:\n\n```tsx\n// app/(dashboard)/layout.tsx\nexport default function DashboardLayout({ children }: { children: React.ReactNode }) {\n  return (\n    <div className=\"flex h-screen\">\n      <Sidebar className=\"w-64 shrink-0\" />\n      <div className=\"flex flex-1 flex-col overflow-hidden\">\n        <Header />\n        <main className=\"flex-1 overflow-y-auto p-6\">{children}</main>\n      </div>\n    </div>\n  );\n}\n```\n\nThe route group `(dashboard)` keeps the layout scoped without affecting the URL.",
+          "inputTokens": 380,
+          "outputTokens": 2200
+        },
+        {
+          "role": "user",
+          "text": "What's the best way to show the current user info in the header? Should I fetch on the server or client?"
+        },
+        {
+          "role": "assistant",
+          "text": "Fetch on the **server** inside a Server Component for the initial render — no waterfall, no loading spinner, no layout shift.\n\n```tsx\n// components/dashboard/header.tsx\nimport { getCurrentUser } from '@/lib/auth/session';\n\nexport async function Header() {\n  const user = await getCurrentUser(); // reads x-user-id header set by middleware\n  \n  return (\n    <header className=\"flex h-14 items-center border-b px-6\">\n      <div className=\"ml-auto flex items-center gap-3\">\n        <Avatar>\n          <AvatarFallback>{user.email[0].toUpperCase()}</AvatarFallback>\n        </Avatar>\n        <span className=\"text-sm text-muted-foreground\">{user.email}</span>\n      </div>\n    </header>\n  );\n}\n```\n\nThe middleware already injected `x-user-id` into the request headers, so `getCurrentUser()` just reads that — no token parsing needed.",
+          "inputTokens": 950,
+          "outputTokens": 1800
+        }
+      ]
+    },
+
+    {
+      "_act": "BACKGROUND — Day 3",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-opus-4-6",
+      "project": "/home/user/saas-starter",
+      "gitBranch": "feat/billing",
+      "daysAgo": 3,
+      "durationMinutes": 70,
+      "tags": ["billing", "stripe", "webhooks", "subscriptions"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "I need to integrate Stripe for subscription billing. Users should be able to subscribe to Pro ($29/mo) and Enterprise ($99/mo) plans."
+        },
+        {
+          "role": "assistant",
+          "text": "Let me set up Stripe subscription billing. I'll need to create products, handle the checkout flow, and set up the webhook to sync subscription status.",
+          "inputTokens": 380,
+          "outputTokens": 240,
+          "tools": [
+            { "name": "bash", "input": { "command": "npm install stripe @stripe/stripe-js" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "Installed. What's the architecture?"
+        },
+        {
+          "role": "assistant",
+          "text": "Here's the complete Stripe billing architecture:\n\n**Flow:**\n```\nUser clicks 'Upgrade' → POST /api/billing/create-checkout\n  → Stripe Checkout Session created\n  → User redirected to Stripe hosted page\n  → On success → Stripe sends webhook to /api/webhooks/stripe\n  → Webhook updates subscriptions table in DB\n  → User redirected to /dashboard?upgraded=true\n```\n\n**Database additions:**\n```sql\nALTER TABLE users ADD COLUMN stripe_customer_id TEXT UNIQUE;\n\nCREATE TABLE subscriptions (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  stripe_subscription_id TEXT UNIQUE NOT NULL,\n  stripe_price_id TEXT NOT NULL,\n  status TEXT NOT NULL, -- 'active' | 'canceled' | 'past_due'\n  current_period_end TIMESTAMPTZ NOT NULL,\n  cancel_at_period_end BOOLEAN DEFAULT false,\n  created_at TIMESTAMPTZ DEFAULT now()\n);\n```\n\n**Webhook handler** (the critical piece):\n```typescript\n// app/api/webhooks/stripe/route.ts\nimport Stripe from 'stripe';\n\nexport async function POST(req: Request) {\n  const sig = req.headers.get('stripe-signature')!;\n  const body = await req.text();\n  \n  let event: Stripe.Event;\n  try {\n    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!);\n  } catch {\n    return new Response('Invalid signature', { status: 400 });\n  }\n  \n  switch (event.type) {\n    case 'customer.subscription.created':\n    case 'customer.subscription.updated':\n      await syncSubscription(event.data.object as Stripe.Subscription);\n      break;\n    case 'customer.subscription.deleted':\n      await cancelSubscription(event.data.object as Stripe.Subscription);\n      break;\n  }\n  return new Response('OK');\n}\n```",
+          "inputTokens": 2800,
+          "outputTokens": 5200,
+          "cacheReadTokens": 2100,
+          "cacheCreationTokens": 800
+        },
+        {
+          "role": "user",
+          "text": "How do I test the webhook locally?"
+        },
+        {
+          "role": "assistant",
+          "text": "Use the Stripe CLI to forward webhook events to your local server:\n\n```bash\n# Install Stripe CLI, then:\nstripe listen --forward-to localhost:3000/api/webhooks/stripe\n```\n\nThis gives you a local webhook signing secret (starts with `whsec_test_...`) — add it to your `.env.local` as `STRIPE_WEBHOOK_SECRET`.\n\nTo trigger test events:\n```bash\nstripe trigger customer.subscription.created\nstripe trigger invoice.payment_failed\n```\n\nFor a full checkout flow test, use Stripe's test card `4242 4242 4242 4242` with any future expiry.",
+          "inputTokens": 4800,
+          "outputTokens": 1800,
+          "cacheReadTokens": 3200
+        }
+      ]
+    },
+
+    {
+      "_act": "BACKGROUND — Day 2",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "project": "/home/user/saas-starter",
+      "gitBranch": "feat/email",
+      "daysAgo": 2,
+      "durationMinutes": 28,
+      "tags": ["email", "resend", "transactional", "templates"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "Add transactional email support — welcome email on signup, password reset flow. Using Resend."
+        },
+        {
+          "role": "assistant",
+          "text": "Resend is a great choice. I'll set up the email module with React Email templates for type-safe, preview-able emails.",
+          "inputTokens": 280,
+          "outputTokens": 180,
+          "tools": [
+            { "name": "bash", "input": { "command": "npm install resend @react-email/components react-email" } }
+          ]
+        },
+        {
+          "role": "user",
+          "text": "Done. Build the welcome email template and the send function."
+        },
+        {
+          "role": "assistant",
+          "text": "```tsx\n// emails/welcome.tsx\nimport { Body, Container, Head, Heading, Html, Preview, Section, Text } from '@react-email/components';\n\nexport function WelcomeEmail({ firstName, loginUrl }: { firstName: string; loginUrl: string }) {\n  return (\n    <Html>\n      <Head />\n      <Preview>Welcome to SaaS Starter — let's get you set up</Preview>\n      <Body style={{ backgroundColor: '#f4f4f5', fontFamily: 'sans-serif' }}>\n        <Container style={{ maxWidth: '560px', margin: '40px auto', background: '#fff', borderRadius: '8px', padding: '40px' }}>\n          <Heading>Welcome, {firstName}!</Heading>\n          <Text>Your account is ready. Click below to get started:</Text>\n          <Section>\n            <a href={loginUrl} style={{ background: '#000', color: '#fff', padding: '12px 24px', borderRadius: '6px', textDecoration: 'none' }}>\n              Go to Dashboard\n            </a>\n          </Section>\n        </Container>\n      </Body>\n    </Html>\n  );\n}\n```\n\n```typescript\n// lib/email.ts\nimport { Resend } from 'resend';\nimport { WelcomeEmail } from '@/emails/welcome';\n\nconst resend = new Resend(process.env.RESEND_API_KEY!);\n\nexport async function sendWelcomeEmail(to: string, firstName: string) {\n  return resend.emails.send({\n    from: 'hello@yourapp.com',\n    to,\n    subject: 'Welcome to SaaS Starter',\n    react: WelcomeEmail({ firstName, loginUrl: process.env.NEXT_PUBLIC_APP_URL + '/login' }),\n  });\n}\n```",
+          "inputTokens": 1400,
+          "outputTokens": 3200,
+          "cacheReadTokens": 900,
+          "tools": [
+            { "name": "write_file", "input": { "path": "emails/welcome.tsx" } },
+            { "name": "write_file", "input": { "path": "lib/email.ts" } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "_act": "BACKGROUND — Yesterday",
+      "tool": "gemini-cli",
+      "provider": "google",
+      "model": "gemini-2.0-flash",
+      "project": "/home/user/saas-starter",
+      "gitBranch": "feat/perf",
+      "daysAgo": 1,
+      "durationMinutes": 22,
+      "tags": ["performance", "caching", "redis", "api"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "Dashboard API calls are slow. How should I add caching? We're on Vercel, considering Redis or just Next.js cache."
+        },
+        {
+          "role": "assistant",
+          "text": "For Vercel-hosted Next.js, use **Next.js built-in `cache()`** for server-side data caching before reaching for Redis:\n\n```typescript\n// lib/data/user-stats.ts\nimport { cache } from 'react';\nimport { unstable_cache } from 'next/cache';\n\n// Per-request deduplication (React cache)\nexport const getCurrentUserStats = cache(async (userId: string) => {\n  return db.select().from(userStats).where(eq(userStats.userId, userId)).get();\n});\n\n// Cross-request persistent cache (Next.js cache)\nexport const getPublicStats = unstable_cache(\n  async () => db.select().from(globalStats).get(),\n  ['global-stats'],\n  { revalidate: 60 } // refresh every 60 seconds\n);\n```\n\nOnly add Redis if you need:\n- Cache sharing across serverless function instances\n- Sub-millisecond latency for hot paths\n- Pub/sub or rate limiting\n\nFor a SaaS app at early scale, `unstable_cache` is sufficient and adds zero infrastructure complexity.",
+          "inputTokens": 340,
+          "outputTokens": 1800
+        },
+        {
+          "role": "user",
+          "text": "Makes sense. What about the database — should I add connection pooling?"
+        },
+        {
+          "role": "assistant",
+          "text": "Yes, definitely. On serverless (Vercel), each function invocation opens a new DB connection — without pooling you'll hit PostgreSQL's connection limit fast.\n\n**Use Neon's connection pooler or PgBouncer:**\n\n```typescript\n// lib/db.ts\nimport { neon } from '@neondatabase/serverless';\nimport { drizzle } from 'drizzle-orm/neon-http';\n\n// Use the pooled connection string (port 5432 → port 6543 on Neon)\nconst sql = neon(process.env.DATABASE_URL_POOLER!);\nexport const db = drizzle(sql, { schema });\n```\n\nNeon's HTTP-based serverless driver + built-in PgBouncer handles this automatically. Just switch your connection string to the pooled endpoint in the Neon dashboard.",
+          "inputTokens": 980,
+          "outputTokens": 1400
+        }
+      ]
+    },
+
+    {
+      "_act": "ACT 1 SETUP — Today's session (the one that triggers the demo)",
+      "tool": "claude-cli",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "project": "/home/user/saas-starter",
+      "gitBranch": "fix/cookie-bug",
+      "daysAgo": 0,
+      "durationMinutes": 15,
+      "tags": ["auth", "cookies", "debugging", "security"],
+      "messages": [
+        {
+          "role": "user",
+          "text": "Hey — I'm seeing a bug where the refresh token cookie isn't being sent on the /api/auth/refresh call in Safari. Might be a SameSite issue. What was the exact cookie config we decided on last week with Gemini?"
+        },
+        {
+          "role": "assistant",
+          "text": "I don't have access to your previous conversations or sessions from other tools — each session starts fresh for me. I can't see what was discussed in your Gemini CLI session last week.\n\nCould you share the cookie configuration you're currently using? I can help debug the Safari issue from there.\n\nAlternatively, if you have Loomi set up, you can search your past sessions to retrieve that decision directly.",
+          "inputTokens": 280,
+          "outputTokens": 420
+        },
+        {
+          "role": "user",
+          "text": "Right. Search Loomi for 'JWT refresh token cookie security configuration'."
+        },
+        {
+          "role": "assistant",
+          "text": "I'll search Loomi now.",
+          "inputTokens": 380,
+          "outputTokens": 80,
+          "tools": [
+            { "name": "mcp__loomi-memory__search", "input": { "query": "JWT refresh token cookie security configuration" } }
+          ]
+        }
+      ]
+    }
+
+  ]
+}

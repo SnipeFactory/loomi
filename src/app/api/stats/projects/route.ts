@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getProjectUsageStats } from "@core/api/sessions";
 import { getSessionById } from "@core/api/sessions";

@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { hasConsent, grantConsent, revokeConsent, getPendingConsent } from "@core/modules/consent";
 import { getModuleRuntime } from "@core/modules/runtime";

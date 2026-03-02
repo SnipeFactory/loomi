@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { getDb } from "@core/db";

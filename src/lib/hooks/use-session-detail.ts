@@ -9,7 +9,8 @@ export function useSessionDetail(sessionId: number | null) {
     session: Session;
     messages: Message[];
   }>(sessionId ? `/api/sessions/${sessionId}` : null, fetcher, {
-    refreshInterval: 3000,
+    refreshInterval: 30000,
+    revalidateOnFocus: false,
   });
 
   return {

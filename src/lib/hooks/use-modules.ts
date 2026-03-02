@@ -7,7 +7,8 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function useModules() {
   const { data, error, mutate } = useSWR<Module[]>("/api/modules", fetcher, {
-    refreshInterval: 10000,
+    refreshInterval: 60000,
+    revalidateOnFocus: false,
   });
 
   const toggleModule = async (moduleId: string, enabled: boolean) => {

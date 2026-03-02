@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getDb } from "@core/db";
 import { modules } from "@core/db/schema";

@@ -20,6 +20,8 @@ export interface AdapterMetadata {
   filePatterns: string[];
   defaultPaths?: string[];
   capabilities: AdapterCapabilities;
+  /** Upload-only adapter: no file watching, accepts ZIP via POST /api/upload/<id> */
+  supportsUpload?: boolean;
 }
 
 export interface FileDetectionResult {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import useSWR from "swr";
 import { useModules } from "@/lib/hooks/use-modules";
 import { ModuleCard } from "@/components/modules/module-card";
@@ -9,6 +9,7 @@ import { PermissionConsentModal } from "@/components/modules/permission-consent-
 import {
   Search, FolderPlus, ArrowLeft, Puzzle, Layers, Blocks, Cpu,
   FolderOpen, ChevronDown, ChevronRight, Pencil, Check, X,
+  Upload, RefreshCw, CheckCircle, SkipForward,
 } from "lucide-react";
 import type { Module } from "@/types/domain";
 
@@ -24,6 +25,14 @@ interface AdapterInfo {
   description: string;
   filePatterns: string[];
   defaultPaths?: string[];
+  supportsUpload?: boolean;
+}
+
+interface ImportResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+  totalSessions: number;
 }
 
 interface WatchedPath {
@@ -36,11 +45,67 @@ interface WatchedPath {
 
 function CollectorCard({ adapter }: { adapter: AdapterInfo }) {
   const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="border-b border-[hsl(var(--border))] last:border-0">
+      {/* Header */}
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+          >
+            {expanded
+              ? <ChevronDown className="h-3.5 w-3.5" />
+              : <ChevronRight className="h-3.5 w-3.5" />
+            }
+          </button>
+          <Cpu className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{adapter.name}</span>
+          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] text-emerald-400">
+            Collector
+          </span>
+          {adapter.supportsUpload && (
+            <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[9px] text-blue-400">
+              Upload
+            </span>
+          )}
+          <span className="rounded-full bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[9px] text-[hsl(var(--muted-foreground))]">
+            {adapter.provider}
+          </span>
+          <span className="text-[10px] text-[hsl(var(--muted-foreground))]">v{adapter.version}</span>
+        </div>
+        <p className="mt-0.5 ml-6 text-xs text-[hsl(var(--muted-foreground))]">{adapter.description}</p>
+        {adapter.filePatterns.length > 0 && (
+          <div className="mt-1 ml-6 flex gap-1 flex-wrap">
+            {adapter.filePatterns.map((pattern) => (
+              <code
+                key={pattern}
+                className="rounded bg-[hsl(var(--muted))] px-1 py-0.5 text-[9px] text-[hsl(var(--muted-foreground))]"
+              >
+                {pattern}
+              </code>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Expanded: path editor or upload UI */}
+      {expanded && (
+        adapter.supportsUpload
+          ? <UploadSection adapterId={adapter.id} />
+          : <PathSection adapter={adapter} />
+      )}
+    </div>
+  );
+}
+
+function PathSection({ adapter }: { adapter: AdapterInfo }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
 
   const { data: pathsData, mutate } = useSWR<WatchedPath[]>(
-    expanded ? `/api/watched-paths?toolType=${adapter.id}` : null,
+    `/api/watched-paths?toolType=${adapter.id}`,
     fetcher,
   );
   const currentPath = pathsData?.[0] ?? null;
@@ -68,73 +133,289 @@ function CollectorCard({ adapter }: { adapter: AdapterInfo }) {
   };
 
   return (
-    <div className="border-b border-[hsl(var(--border))] last:border-0">
-      <div className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-          >
-            {expanded
-              ? <ChevronDown className="h-3.5 w-3.5" />
-              : <ChevronRight className="h-3.5 w-3.5" />
-            }
-          </button>
-          <Cpu className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{adapter.name}</span>
-          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] text-emerald-400">
-            Collector
-          </span>
-          <span className="rounded-full bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[9px] text-[hsl(var(--muted-foreground))]">
-            {adapter.provider}
-          </span>
-          <span className="text-[10px] text-[hsl(var(--muted-foreground))]">v{adapter.version}</span>
-        </div>
-        <p className="mt-0.5 ml-6 text-xs text-[hsl(var(--muted-foreground))]">{adapter.description}</p>
-        <div className="mt-1 ml-6 flex gap-1 flex-wrap">
-          {adapter.filePatterns.map((pattern) => (
-            <code
-              key={pattern}
-              className="rounded bg-[hsl(var(--muted))] px-1 py-0.5 text-[9px] text-[hsl(var(--muted-foreground))]"
-            >
-              {pattern}
-            </code>
-          ))}
-        </div>
+    <div className="px-4 pb-3 ml-6">
+      <div className="flex items-center gap-2">
+        <FolderOpen className="h-3 w-3 text-[hsl(var(--muted-foreground))] shrink-0" />
+        {editing ? (
+          <>
+            <input
+              autoFocus
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") handleCancel(); }}
+              className="flex-1 rounded bg-[hsl(var(--muted))] px-2 py-1 text-xs text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]"
+            />
+            <button onClick={handleSave} className="text-green-400 hover:text-green-300">
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={handleCancel} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="flex-1 truncate text-xs text-[hsl(var(--foreground))]">
+              {currentPath?.path ?? adapter.defaultPaths?.[0] ?? "Not configured"}
+            </span>
+            <button onClick={handleEdit} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+              <Pencil className="h-3 w-3" />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type UploadPhase = "idle" | "uploading" | "processing" | "done" | "error";
+type UploadMode = "file" | "local-path";
+
+const MAX_CLIENT_SIZE = 200 * 1024 * 1024; // 200 MB
+
+function ImportResult({ result, onReset }: { result: ImportResult; onReset: () => void }) {
+  return (
+    <div className="rounded border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.4)] divide-y divide-[hsl(var(--border))] text-xs">
+      <div className="px-3 py-1.5 text-[hsl(var(--muted-foreground))]">
+        {result.totalSessions} sessions processed
+      </div>
+      <div className="flex items-center gap-2 px-3 py-1.5">
+        <CheckCircle className="h-3 w-3 text-green-400" />
+        <span className="text-[hsl(var(--muted-foreground))]">Imported</span>
+        <span className="ml-auto font-medium text-[hsl(var(--foreground))]">{result.imported}</span>
+      </div>
+      <div className="flex items-center gap-2 px-3 py-1.5">
+        <RefreshCw className="h-3 w-3 text-blue-400" />
+        <span className="text-[hsl(var(--muted-foreground))]">Updated</span>
+        <span className="ml-auto font-medium text-[hsl(var(--foreground))]">{result.updated}</span>
+      </div>
+      <div className="flex items-center gap-2 px-3 py-1.5">
+        <SkipForward className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
+        <span className="text-[hsl(var(--muted-foreground))]">Skipped</span>
+        <span className="ml-auto font-medium text-[hsl(var(--foreground))]">{result.skipped}</span>
+      </div>
+      <div className="px-3 py-1.5">
+        <button onClick={onReset} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] underline underline-offset-2">
+          Import another
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function UploadSection({ adapterId }: { adapterId: string }) {
+  const [mode, setMode] = useState<UploadMode>("file");
+
+  // Shared state
+  const [phase, setPhase] = useState<UploadPhase>("idle");
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // File mode state
+  const [file, setFile] = useState<File | null>(null);
+  const [pct, setPct] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Local path mode state
+  const [localPath, setLocalPath] = useState("");
+
+  const reset = () => {
+    setFile(null); setPhase("idle"); setPct(0); setResult(null); setErrorMsg(null);
+    setLocalPath("");
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const switchMode = (m: UploadMode) => {
+    reset();
+    setMode(m);
+  };
+
+  const isRunning = phase === "uploading" || phase === "processing";
+
+  // ── File mode handlers ──────────────────────────────────────────
+
+  const handleFile = (f: File) => {
+    if (!f.name.endsWith(".zip")) { setErrorMsg("Only .zip files are accepted."); return; }
+    if (f.size > MAX_CLIENT_SIZE) {
+      setErrorMsg("200 MB 초과 파일은 Local Path 모드를 사용하세요.");
+      return;
+    }
+    setFile(f);
+    setPhase("idle");
+    setResult(null);
+    setErrorMsg(null);
+  };
+
+  const handleUpload = () => {
+    if (!file) return;
+    setPhase("uploading");
+    setPct(0);
+    const formData = new FormData();
+    formData.append("file", file);
+    const xhr = new XMLHttpRequest();
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) setPct(Math.round((e.loaded / e.total) * 100));
+    });
+    xhr.upload.addEventListener("load", () => setPhase("processing"));
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { setResult(JSON.parse(xhr.responseText)); setPhase("done"); }
+        catch { setErrorMsg("Invalid response."); setPhase("error"); }
+      } else {
+        try { setErrorMsg(JSON.parse(xhr.responseText).error || "Upload failed."); }
+        catch { setErrorMsg(`Server error (${xhr.status})`); }
+        setPhase("error");
+      }
+    });
+    xhr.addEventListener("error", () => { setErrorMsg("Network error."); setPhase("error"); });
+    xhr.open("POST", `/api/upload/${adapterId}`);
+    xhr.send(formData);
+  };
+
+  // ── Local path mode handlers ────────────────────────────────────
+
+  const handleLocalImport = async () => {
+    const trimmed = localPath.trim();
+    if (!trimmed) return;
+    setPhase("processing");
+    setErrorMsg(null);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/upload/${adapterId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ localPath: trimmed }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResult(data);
+        setPhase("done");
+      } else {
+        setErrorMsg(data.error || `Server error (${res.status})`);
+        setPhase("error");
+      }
+    } catch {
+      setErrorMsg("Network error.");
+      setPhase("error");
+    }
+  };
+
+  return (
+    <div className="px-4 pb-4 ml-6 space-y-2.5">
+      {/* Mode toggle */}
+      <div className="flex gap-0.5 rounded-md bg-[hsl(var(--muted))] p-0.5 w-fit">
+        <button
+          onClick={() => switchMode("file")}
+          className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            mode === "file"
+              ? "bg-[hsl(var(--background))] text-[hsl(var(--foreground))] shadow-sm"
+              : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+          }`}
+        >
+          Upload File
+        </button>
+        <button
+          onClick={() => switchMode("local-path")}
+          className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            mode === "local-path"
+              ? "bg-[hsl(var(--background))] text-[hsl(var(--foreground))] shadow-sm"
+              : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+          }`}
+        >
+          Local Path
+        </button>
       </div>
 
-      {expanded && (
-        <div className="px-4 pb-3 ml-6">
+      {/* ── File mode ── */}
+      {mode === "file" && phase !== "done" && (
+        <>
           <div className="flex items-center gap-2">
-            <FolderOpen className="h-3 w-3 text-[hsl(var(--muted-foreground))] shrink-0" />
-            {editing ? (
-              <>
-                <input
-                  autoFocus
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") handleCancel(); }}
-                  className="flex-1 rounded bg-[hsl(var(--muted))] px-2 py-1 text-xs text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]"
-                />
-                <button onClick={handleSave} className="text-green-400 hover:text-green-300">
-                  <Check className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={handleCancel} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </>
+            <button
+              onClick={() => !isRunning && inputRef.current?.click()}
+              disabled={isRunning}
+              className="rounded bg-[hsl(var(--muted))] px-2.5 py-1 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
+            >
+              Choose ZIP
+            </button>
+            {file ? (
+              <span className="flex-1 truncate text-xs text-[hsl(var(--foreground))]">
+                {file.name} <span className="text-[hsl(var(--muted-foreground))]">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
+              </span>
             ) : (
-              <>
-                <span className="flex-1 truncate text-xs text-[hsl(var(--foreground))]">
-                  {currentPath?.path ?? adapter.defaultPaths?.[0] ?? "Not configured"}
-                </span>
-                <button onClick={handleEdit} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
-                  <Pencil className="h-3 w-3" />
-                </button>
-              </>
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">No file selected (max 200 MB)</span>
             )}
+            {file && !isRunning && (
+              <button onClick={reset} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <input ref={inputRef} type="file" accept=".zip" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
           </div>
+          {file && phase === "idle" && (
+            <button
+              onClick={handleUpload}
+              className="flex items-center gap-1.5 rounded bg-[hsl(var(--primary))] px-3 py-1 text-xs text-[hsl(var(--primary-foreground))] hover:opacity-90"
+            >
+              <Upload className="h-3 w-3" />
+              Upload &amp; Import
+            </button>
+          )}
+          {phase === "uploading" && (
+            <div className="space-y-1">
+              <div className="h-1.5 w-full rounded-full bg-[hsl(var(--muted))]">
+                <div className="h-1.5 rounded-full bg-[hsl(var(--primary))] transition-all" style={{ width: `${pct}%` }} />
+              </div>
+              <span className="text-[10px] text-[hsl(var(--muted-foreground))]">Uploading… {pct}%</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Local path mode ── */}
+      {mode === "local-path" && phase !== "done" && (
+        <>
+          <div className="flex items-center gap-2">
+            <input
+              value={localPath}
+              onChange={(e) => setLocalPath(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !isRunning) handleLocalImport(); }}
+              disabled={isRunning}
+              placeholder="/absolute/path/to/file.zip"
+              className="flex-1 rounded bg-[hsl(var(--muted))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] disabled:opacity-50"
+            />
+            <button
+              onClick={handleLocalImport}
+              disabled={!localPath.trim() || isRunning}
+              className="shrink-0 flex items-center gap-1.5 rounded bg-[hsl(var(--primary))] px-3 py-1 text-xs text-[hsl(var(--primary-foreground))] hover:opacity-90 disabled:opacity-50"
+            >
+              <Upload className="h-3 w-3" />
+              Import
+            </button>
+          </div>
+          <p className="text-[10px] text-[hsl(var(--muted-foreground))]">
+            서버 파일시스템 절대 경로 — 대용량 파일에 권장
+          </p>
+        </>
+      )}
+
+      {/* Processing spinner (shared) */}
+      {phase === "processing" && (
+        <div className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+          <RefreshCw className="h-3 w-3 animate-spin" />
+          Processing sessions…
         </div>
+      )}
+
+      {/* Error (shared) */}
+      {phase === "error" && (
+        <div className="text-xs text-red-400">
+          {errorMsg}{" "}
+          <button onClick={reset} className="underline underline-offset-2">retry</button>
+        </div>
+      )}
+
+      {/* Result (shared) */}
+      {phase === "done" && result && (
+        <ImportResult result={result} onReset={reset} />
       )}
     </div>
   );

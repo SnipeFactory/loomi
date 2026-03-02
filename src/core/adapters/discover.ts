@@ -3,20 +3,10 @@ import os from "os";
 import path from "path";
 import { eq } from "drizzle-orm";
 import { adapterRegistry } from "./registry";
-import { ClaudeCliAdapter } from "./claude-cli";
-import { ChatGPTExportAdapter } from "./chatgpt-export";
-import { CursorAdapter } from "./cursor";
-import { AiderAdapter } from "./aider";
 import { getDb } from "../db";
 import { watchedPaths } from "../db/schema";
 
-/** Register all built-in adapters */
-export function registerBuiltinAdapters(): void {
-  adapterRegistry.register(new ClaudeCliAdapter());
-  adapterRegistry.register(new ChatGPTExportAdapter());
-  adapterRegistry.register(new CursorAdapter());
-  adapterRegistry.register(new AiderAdapter());
-}
+export { registerBuiltinAdapters } from "./register";
 
 /**
  * Auto-register each adapter's defaultPaths into watched_paths (if not already present).

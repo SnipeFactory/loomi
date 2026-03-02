@@ -1,37 +1,85 @@
 {
   "id": "log-summarizer",
   "name": "Session Summarizer",
-  "version": "1.0.0",
-  "description": "Generates AI-powered summaries and keywords for sessions on demand",
+  "version": "2.0.0",
+  "description": "Local extraction summary (always on) + optional AI summary with 3 modes: auto-swap, auto-fix, manual.",
   "author": "Loomi",
   "loomiVersion": "1.0.0",
   "runtime": "server",
   "serverEntry": "index.ts",
-  "hooks": ["onModuleInit"],
+  "hooks": ["onModuleInit", "onSessionEnd"],
   "slots": [],
   "permissions": ["db:read", "db:write", "network"],
   "isPremium": false,
   "settingsSchema": [
     {
+      "key": "mode",
+      "type": "select",
+      "label": "AI Summary Mode",
+      "description": "Local summary is always generated for free. AI summary is optional.",
+      "default": "manual",
+      "options": [
+        { "label": "Manual (button per session)", "value": "manual" },
+        { "label": "Auto — Model Swap (rotate free models → paid fallback)", "value": "auto-swap" },
+        { "label": "Auto — Fixed Model", "value": "auto-fix" }
+      ]
+    },
+    {
+      "key": "freeModelList",
+      "type": "multiselect",
+      "label": "Free Models (tried in order)",
+      "description": "Rotates through selected models when rate-limited. [auto-swap only]",
+      "default": ["stepfun/step-3.5-flash:free", "meta-llama/llama-3.3-70b-instruct:free"],
+      "showIf": { "field": "mode", "values": ["auto-swap", "manual"] },
+      "options": [
+        { "label": "StepFun Step 3.5 Flash", "value": "stepfun/step-3.5-flash:free" },
+        { "label": "Meta Llama 3.3 70B", "value": "meta-llama/llama-3.3-70b-instruct:free" },
+        { "label": "Google Gemma 3 27B", "value": "google/gemma-3-27b-it:free" },
+        { "label": "Upstage Solar Pro 3", "value": "upstage/solar-pro-3:free" },
+        { "label": "Mistral 7B Instruct", "value": "mistralai/mistral-7b-instruct:free" },
+        { "label": "NVIDIA Nemotron Nano 30B", "value": "nvidia/nemotron-3-nano-30b-a3b:free" },
+        { "label": "Arcee Trinity Large", "value": "arcee-ai/trinity-large-preview:free" },
+        { "label": "Arcee Trinity Mini", "value": "arcee-ai/trinity-mini:free" }
+      ]
+    },
+    {
+      "key": "paidFallbackModel",
+      "type": "select",
+      "label": "Paid Fallback Model (optional)",
+      "description": "Used only when all free models are exhausted. [auto-swap only]",
+      "default": "",
+      "showIf": { "field": "mode", "values": ["auto-swap", "manual"] },
+      "options": [
+        { "label": "None", "value": "" },
+        { "label": "Claude 3 Haiku  ($0.25/1M in)", "value": "anthropic/claude-3-haiku" },
+        { "label": "Claude 3.5 Haiku ($0.80/1M in)", "value": "anthropic/claude-3.5-haiku" },
+        { "label": "GPT-4o Mini      ($0.15/1M in)", "value": "openai/gpt-4o-mini" },
+        { "label": "Gemini Flash 1.5 ($0.075/1M in)", "value": "google/gemini-flash-1.5" }
+      ]
+    },
+    {
+      "key": "fixedModel",
+      "type": "select",
+      "label": "Model",
+      "description": "Model used for summarization. [auto-fix and manual modes]",
+      "default": "anthropic/claude-3-haiku",
+      "showIf": { "field": "mode", "values": ["auto-fix"] },
+      "options": [
+        { "label": "Claude 3 Haiku  ($0.25/1M in)", "value": "anthropic/claude-3-haiku" },
+        { "label": "Claude 3.5 Haiku ($0.80/1M in)", "value": "anthropic/claude-3.5-haiku" },
+        { "label": "GPT-4o Mini      ($0.15/1M in)", "value": "openai/gpt-4o-mini" },
+        { "label": "Gemini Flash 1.5 ($0.075/1M in)", "value": "google/gemini-flash-1.5" },
+        { "label": "StepFun Step 3.5 Flash (Free)", "value": "stepfun/step-3.5-flash:free" },
+        { "label": "Meta Llama 3.3 70B (Free)", "value": "meta-llama/llama-3.3-70b-instruct:free" },
+        { "label": "Google Gemma 3 27B (Free)", "value": "google/gemma-3-27b-it:free" }
+      ]
+    },
+    {
       "key": "apiKey",
       "type": "string",
       "label": "OpenRouter API Key",
+      "description": "Required for AI summary modes. Get one at openrouter.ai.",
       "default": ""
-    },
-    {
-      "key": "summaryModel",
-      "type": "select",
-      "label": "Summary Model",
-      "default": "openrouter/auto",
-      "options": [
-        { "label": "Auto Router (Free)", "value": "openrouter/auto" },
-        { "label": "StepFun Step 3.5 Flash (Free)", "value": "stepfun/step-3.5-flash:free" },
-        { "label": "Upstage Solar Pro 3 (Free)", "value": "upstage/solar-pro-3:free" },
-        { "label": "NVIDIA Nemotron 3 Nano 30B (Free)", "value": "nvidia/nemotron-3-nano-30b-a3b:free" },
-        { "label": "Arcee Trinity Large (Free)", "value": "arcee-ai/trinity-large-preview:free" },
-        { "label": "Arcee Trinity Mini (Free)", "value": "arcee-ai/trinity-mini:free" },
-        { "label": "LiquidAI LFM 1.2B Thinking (Free)", "value": "liquid/lfm-2.5-1.2b-thinking:free" }
-      ]
     }
   ],
   "tier": "explorer"

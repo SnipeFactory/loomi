@@ -1,5 +1,5 @@
 import type { HookContext } from "../../src/core/modules/types";
-import { indexSession, indexAll, indexSessionSummary, getIndexingStatus } from "../../src/core/api/memory";
+import { indexSession, indexAll, indexSessionSummary, indexAllSessionSummaries, getIndexingStatus } from "../../src/core/api/memory";
 import { tagSession } from "../../src/core/api/auto-tagger";
 
 let ctx: HookContext | null = null;
@@ -8,14 +8,22 @@ export async function init(hookCtx: HookContext) {
   ctx = hookCtx;
   ctx.logger.info("Episodic Memory initialized");
 
-  // Background batch indexing of unindexed messages
   const status = getIndexingStatus();
+
+  // Background batch indexing of unindexed messages
   if (status.pendingMessages > 0) {
     ctx.logger.info(`${status.pendingMessages} messages pending indexing, starting batch...`);
-    // Run in background to not block startup
     indexAll()
       .then((count) => ctx?.logger.info(`Batch indexed ${count} message pairs`))
       .catch((err) => ctx?.logger.error(`Batch indexing error: ${err}`));
+  }
+
+  // Background session summary indexing (covers sessions skipped at startup)
+  if (status.pendingSessionSummaries > 0) {
+    ctx.logger.info(`${status.pendingSessionSummaries} session summaries pending indexing, starting batch...`);
+    indexAllSessionSummaries()
+      .then((count) => ctx?.logger.info(`Batch indexed ${count} session summaries`))
+      .catch((err) => ctx?.logger.error(`Session summary batch indexing error: ${err}`));
   }
 }
 

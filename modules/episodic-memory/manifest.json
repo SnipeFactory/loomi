@@ -8,7 +8,7 @@
   "runtime": "server",
   "serverEntry": "index.ts",
   "hooks": ["onModuleInit", "onSessionEnd"],
-  "slots": ["insight-tab"],
+  "slots": [],
   "permissions": ["db:read", "db:write"],
   "isPremium": false,
   "tier": "explorer",

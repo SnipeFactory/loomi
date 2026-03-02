@@ -4,18 +4,22 @@ import { useState } from "react";
 import useSWR from "swr";
 import { useSessions } from "../hooks/use-sessions";
 import { SessionCard } from "./session-card";
-import { Search, Sparkles, Zap, Globe, HardDrive, HelpCircle, Layers } from "lucide-react";
+import { Search, Sparkles, Zap, Globe, HardDrive, HelpCircle, Layers, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-const PROVIDER_ICONS: Record<string, { icon: typeof Sparkles; color: string }> = {
-  anthropic: { icon: Sparkles,   color: "text-orange-400" },
-  openai:    { icon: Zap,        color: "text-green-400" },
-  google:    { icon: Globe,      color: "text-blue-400" },
-  local:     { icon: HardDrive,  color: "text-purple-400" },
-  unknown:   { icon: HelpCircle, color: "text-gray-400" },
+// Per-toolType display metadata
+const TOOL_META: Record<string, { icon: typeof Sparkles; color: string; label: string }> = {
+  "claude-cli":       { icon: Sparkles,   color: "text-orange-400", label: "Claude CLI" },
+  "claude-ai-export": { icon: Upload,     color: "text-orange-300", label: "Claude.ai" },
+  "chatgpt-export":   { icon: Zap,        color: "text-green-400",  label: "ChatGPT" },
+  "cursor":           { icon: HardDrive,  color: "text-purple-400", label: "Cursor" },
+  "aider":            { icon: HardDrive,  color: "text-blue-400",   label: "Aider" },
+  "gemini-cli":       { icon: Globe,      color: "text-blue-400",   label: "Gemini CLI" },
 };
+
+const FALLBACK_META = { icon: HelpCircle, color: "text-gray-400", label: "" };
 
 export function SidebarSessions({
   activeSessionId,
@@ -25,27 +29,22 @@ export function SidebarSessions({
   onSelectSession: (id: number) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [providerFilter, setProviderFilter] = useState<string | undefined>(undefined);
+  const [toolFilter, setToolFilter] = useState<string | undefined>(undefined);
   const { sessions, isLoading } = useSessions({
     q: query || undefined,
-    provider: providerFilter,
+    tool: toolFilter,
   });
 
-  // Fetch adapters + providers that actually have sessions
-  const { data: adapterData } = useSWR("/api/adapters", fetcher, { refreshInterval: 60000 });
-  const adapters: { id: string; name: string; provider: string }[] = adapterData?.adapters || [];
-  const { data: providerCounts } = useSWR("/api/sessions/providers", fetcher, { refreshInterval: 30000 });
-  const activeProviders: Set<string> = new Set(
-    (providerCounts || []).map((p: { provider: string }) => p.provider)
+  // Build tabs from actual toolTypes in DB — no adapter registry dependency
+  const { data: toolCounts } = useSWR<{ tool_type: string; count: number }[]>(
+    "/api/sessions/tools",
+    fetcher,
+    { refreshInterval: 30000 }
   );
-
-  // Only show tabs for providers that have session data
-  const providerFilters = adapters.reduce<{ provider: string; label: string }[]>((acc, a) => {
-    if (!acc.some((f) => f.provider === a.provider) && activeProviders.has(a.provider)) {
-      acc.push({ provider: a.provider, label: a.name });
-    }
-    return acc;
-  }, []);
+  const toolTabs = (toolCounts || []).map((t) => {
+    const meta = TOOL_META[t.tool_type] || { ...FALLBACK_META, label: t.tool_type };
+    return { toolType: t.tool_type, label: meta.label, icon: meta.icon, color: meta.color };
+  });
 
   return (
     <div className="flex h-full flex-col border-r border-[hsl(var(--border))]">
@@ -63,15 +62,14 @@ export function SidebarSessions({
         </div>
       </div>
 
-      {/* Adapter-based filter tabs */}
-      {providerFilters.length > 0 && (
+      {/* Tool filter tabs */}
+      {toolTabs.length > 0 && (
         <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 border-b border-[hsl(var(--border))] overflow-x-auto">
-          {/* All tab */}
           <button
-            onClick={() => setProviderFilter(undefined)}
+            onClick={() => setToolFilter(undefined)}
             className={cn(
               "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors whitespace-nowrap",
-              providerFilter === undefined
+              toolFilter === undefined
                 ? "bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"
             )}
@@ -79,15 +77,13 @@ export function SidebarSessions({
             <Layers className="h-3 w-3" />
             All
           </button>
-          {/* One tab per registered adapter provider */}
-          {providerFilters.map((pf) => {
-            const iconInfo = PROVIDER_ICONS[pf.provider] || PROVIDER_ICONS.unknown;
-            const Icon = iconInfo.icon;
-            const isActive = providerFilter === pf.provider;
+          {toolTabs.map((t) => {
+            const Icon = t.icon;
+            const isActive = toolFilter === t.toolType;
             return (
               <button
-                key={pf.provider}
-                onClick={() => setProviderFilter(pf.provider)}
+                key={t.toolType}
+                onClick={() => setToolFilter(t.toolType)}
                 className={cn(
                   "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors whitespace-nowrap",
                   isActive
@@ -95,8 +91,8 @@ export function SidebarSessions({
                     : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"
                 )}
               >
-                <Icon className={cn("h-3 w-3", isActive ? iconInfo.color : "")} />
-                {pf.label}
+                <Icon className={cn("h-3 w-3", isActive ? t.color : "")} />
+                {t.label}
               </button>
             );
           })}

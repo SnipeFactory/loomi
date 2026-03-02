@@ -1,6 +1,80 @@
 "use client";
 
 import { useState } from "react";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+interface WorkerHealth {
+  status: "ready" | "restarting" | "dead";
+  lastAlive: number | null;
+  restartCount: number;
+  pendingRequests: number;
+}
+
+interface IndexingStatus {
+  totalMessages: number;
+  indexedMessages: number;
+  pendingMessages: number;
+  indexedSessionSummaries: number;
+  totalSessionsWithSummary: number;
+}
+
+function McpStatusBar() {
+  const { data: health } = useSWR<WorkerHealth>("/api/memory?action=worker-health", fetcher, { refreshInterval: 5000 });
+  const { data: status } = useSWR<IndexingStatus>("/api/memory?action=status", fetcher, { refreshInterval: 10000 });
+
+  const workerColor =
+    health?.status === "ready" ? "bg-green-500" :
+    health?.status === "restarting" ? "bg-yellow-500" :
+    health?.status === "dead" ? "bg-red-500" :
+    "bg-[hsl(var(--muted-foreground))]";
+
+  const workerLabel = health?.status ?? "unknown";
+
+  const msgPct = status && status.totalMessages > 0
+    ? Math.round((status.indexedMessages / status.totalMessages) * 100)
+    : null;
+
+  const sessPct = status && status.totalSessionsWithSummary > 0
+    ? Math.round((status.indexedSessionSummaries / status.totalSessionsWithSummary) * 100)
+    : null;
+
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted))/40] px-3 py-2 text-[10px]">
+      {/* Worker badge */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className={`h-1.5 w-1.5 rounded-full ${workerColor}`} />
+        <span className="font-mono text-[hsl(var(--foreground))]">worker</span>
+        <span className="text-[hsl(var(--muted-foreground))]">{workerLabel}</span>
+      </div>
+      <span className="text-[hsl(var(--border))]">|</span>
+      {/* Message index */}
+      <div className="flex items-center gap-1 text-[hsl(var(--muted-foreground))]">
+        <span>msg</span>
+        <span className="font-mono text-[hsl(var(--foreground))]">
+          {status ? `${status.indexedMessages}/${status.totalMessages}` : "—"}
+        </span>
+        {msgPct !== null && <span className="text-[hsl(var(--muted-foreground))]">({msgPct}%)</span>}
+      </div>
+      <span className="text-[hsl(var(--border))]">|</span>
+      {/* Session index */}
+      <div className="flex items-center gap-1 text-[hsl(var(--muted-foreground))]">
+        <span>sess</span>
+        <span className="font-mono text-[hsl(var(--foreground))]">
+          {status ? `${status.indexedSessionSummaries}/${status.totalSessionsWithSummary}` : "—"}
+        </span>
+        {sessPct !== null && <span className="text-[hsl(var(--muted-foreground))]">({sessPct}%)</span>}
+      </div>
+      {health?.restartCount ? (
+        <>
+          <span className="text-[hsl(var(--border))]">|</span>
+          <span className="text-yellow-500">restarts: {health.restartCount}</span>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 type McpTool = "search" | "sessions" | "status" | "show";
 
@@ -85,6 +159,9 @@ export function McpTester() {
 
   return (
     <div className="space-y-4">
+      {/* Live MCP status */}
+      <McpStatusBar />
+
       {/* Tool selector */}
       <div className="space-y-1">
         <label className="text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Tool</label>

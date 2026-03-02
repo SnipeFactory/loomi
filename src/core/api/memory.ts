@@ -25,6 +25,62 @@ import { conceptsToTagString, getSessionConcepts } from "./auto-tagger";
 /** Custom embed function — lets MCP server use inline ONNX instead of the worker client */
 export type EmbedFn = (text: string, modelName: string) => Promise<number[]>;
 
+/**
+ * Custom embed-pair function — mirrors the IPC embed-pair operation.
+ * Produces a single embedding from user+assistant text combined with tool/tag context.
+ */
+export type EmbedPairFn = (
+  userText: string,
+  assistantText: string,
+  modelName: string,
+  toolNames?: string[],
+  sessionTagString?: string,
+) => Promise<number[]>;
+
+/**
+ * Returns an EmbedFn that delegates to the backend HTTP server when
+ * LOOMI_BACKEND_URL is set (Next.js process), or falls back to the
+ * local IPC worker client (backend process).
+ */
+function getDefaultEmbedFn(): EmbedFn {
+  const backendUrl = process.env.LOOMI_BACKEND_URL;
+  if (backendUrl) {
+    return async (text: string, modelName: string) => {
+      const res = await fetch(`${backendUrl}/api/embed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, model: modelName }),
+      });
+      if (!res.ok) throw new Error(`[Embed HTTP] ${res.status}`);
+      return ((await res.json()) as { embedding: number[] }).embedding;
+    };
+  }
+  return (text: string, modelName: string) => getEmbeddingWorkerClient().embed(text, modelName);
+}
+
+/**
+ * Returns an EmbedPairFn that delegates to the backend HTTP server when
+ * LOOMI_BACKEND_URL is set (Next.js process), or falls back to the
+ * local IPC worker client (backend process).
+ * The concatenation logic stays inside the worker — this is not a pre-join hack.
+ */
+function getDefaultEmbedPairFn(): EmbedPairFn {
+  const backendUrl = process.env.LOOMI_BACKEND_URL;
+  if (backendUrl) {
+    return async (userText, assistantText, modelName, toolNames, sessionTagString) => {
+      const res = await fetch(`${backendUrl}/api/embed-pair`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userText, assistantText, model: modelName, toolNames, sessionTagString }),
+      });
+      if (!res.ok) throw new Error(`[EmbedPair HTTP] ${res.status}`);
+      return ((await res.json()) as { embedding: number[] }).embedding;
+    };
+  }
+  return (userText, assistantText, modelName, toolNames, sessionTagString) =>
+    getEmbeddingWorkerClient().embedPair(userText, assistantText, modelName, toolNames, sessionTagString);
+}
+
 export interface MemorySearchOptions {
   query: string | string[];
   mode?: "vector" | "vector-ml" | "text" | "both";
@@ -165,7 +221,7 @@ export async function indexMessagePair(
   }
 
   // Generate embedding and insert into the selected model's vec table
-  const embedding = await getEmbeddingWorkerClient().embedPair(
+  const embedding = await getDefaultEmbedPairFn()(
     userText, assistantText, selectedModel, toolNames, sessionTagString
   );
   db.run(sql.raw(`DELETE FROM ${vecTable} WHERE id = '${userMsgId}'`));
@@ -201,10 +257,20 @@ export async function indexSessionSummary(sessionId: number): Promise<boolean> {
   `)[0] as { id: number; session_uuid: string; session_tags: string | null } | undefined;
   if (!session) return false;
 
-  const moduleRow = db.all(sql`
+  // Prefer AI summary; fall back to local (extraction-based) summary
+  const aiRow = db.all(sql`
     SELECT value FROM module_data
     WHERE module_id = 'log-summarizer' AND key = ${"summary:" + session.session_uuid}
   `)[0] as { value: string | null } | undefined;
+
+  const localRow = !aiRow?.value
+    ? (db.all(sql`
+        SELECT value FROM module_data
+        WHERE module_id = 'log-summarizer' AND key = ${"local-summary:" + session.session_uuid}
+      `)[0] as { value: string | null } | undefined)
+    : undefined;
+
+  const moduleRow = aiRow?.value ? aiRow : localRow;
   if (!moduleRow?.value) return false;
 
   let summary: string;
@@ -221,7 +287,7 @@ export async function indexSessionSummary(sessionId: number): Promise<boolean> {
   const sessionTags = session.session_tags || "";
   const textToEmbed = [summary, keywords, sessionTags].filter(Boolean).join(" ");
 
-  const embedding = await getEmbeddingWorkerClient().embed(textToEmbed, SESSION_ML_MODEL);
+  const embedding = await getDefaultEmbedFn()(textToEmbed, SESSION_ML_MODEL);
   const embeddingJson = JSON.stringify(Array.from(new Float32Array(embedding)));
 
   // Upsert vec_session_summaries
@@ -255,9 +321,16 @@ export async function indexAllSessionSummaries(): Promise<number> {
   const pending = db.all(sql`
     SELECT DISTINCT s.id, s.session_uuid
     FROM sessions s
-    JOIN module_data md
-      ON md.key = 'summary:' || s.session_uuid AND md.module_id = 'log-summarizer'
     WHERE s.summary_indexed_at IS NULL
+      AND (
+        EXISTS (
+          SELECT 1 FROM module_data
+          WHERE module_id = 'log-summarizer' AND key = 'summary:' || s.session_uuid
+        ) OR EXISTS (
+          SELECT 1 FROM module_data
+          WHERE module_id = 'log-summarizer' AND key = 'local-summary:' || s.session_uuid
+        )
+      )
     ORDER BY s.id ASC
   `) as { id: number; session_uuid: string }[];
 
@@ -396,7 +469,7 @@ async function vectorSearch(
   const vecTable = MODEL_TABLE_REGISTRY[modelName];
   if (!vecTable) return [];
 
-  const doEmbed = opts.embedFn || ((text: string, model: string) => getEmbeddingWorkerClient().embed(text, model));
+  const doEmbed = opts.embedFn || getDefaultEmbedFn();
   const embedding = await doEmbed(query, modelName);
   const source = vecTable === "vec_messages" ? ("vector" as const) : ("vector-ml" as const);
 
@@ -689,7 +762,7 @@ function rrfMergeSession(
  */
 export async function searchSessions(opts: SessionSearchOptions): Promise<SessionSearchResult[]> {
   const limit = opts.limit || 10;
-  const embedFn: EmbedFn = opts.embedFn || ((text, model) => getEmbeddingWorkerClient().embed(text, model));
+  const embedFn: EmbedFn = opts.embedFn || getDefaultEmbedFn();
 
   const [vecResults, ftsResults] = await Promise.all([
     vectorSearchSessions(opts.query, limit * 2, opts, embedFn),
@@ -869,7 +942,11 @@ export function getIndexingStatus(): IndexingStatus {
   const totalWithSummary = db.all(sql`
     SELECT COUNT(DISTINCT s.id) as cnt
     FROM sessions s
-    JOIN module_data md ON md.key = 'summary:' || s.session_uuid AND md.module_id = 'log-summarizer'
+    WHERE EXISTS (
+      SELECT 1 FROM module_data
+      WHERE module_id = 'log-summarizer'
+        AND (key = 'summary:' || s.session_uuid OR key = 'local-summary:' || s.session_uuid)
+    )
   `)[0] as { cnt: number };
 
   const indexedSummaries = db.all(sql`

@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { searchMemory, indexSession, indexAll, getIndexingStatus, cleanupNullVectors, cleanupToolResultVectors, cleanupNoiseVectors, searchSessions, indexAllSessionSummaries } from "@core/api/memory";
 import { getEmbeddingWorkerClient } from "@core/embeddings/worker-client";
@@ -12,6 +14,12 @@ export async function GET(request: Request) {
   }
 
   if (action === "worker-health") {
+    const backendUrl = process.env.LOOMI_BACKEND_URL;
+    if (backendUrl) {
+      const res = await fetch(`${backendUrl}/api/worker-health`);
+      return NextResponse.json(await res.json());
+    }
+    // Single-process fallback (legacy / no LOOMI_BACKEND_URL)
     const health = getEmbeddingWorkerClient().getWorkerHealth();
     return NextResponse.json(health);
   }

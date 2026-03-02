@@ -5,7 +5,7 @@ import {
   FolderSearch,
   Search,
   Globe,
-  UserQuestion,
+  HelpCircle,
   Wrench,
   LucideIcon,
   Code2,
@@ -44,7 +44,7 @@ const TOOL_STYLE_MAP: Record<string, ToolStyle> = {
   google_web_search: { color: "bg-cyan-600", icon: Globe },
 
   // Interaction / Skills
-  ask_user: { color: "bg-pink-500", icon: UserQuestion },
+  ask_user: { color: "bg-pink-500", icon: HelpCircle },
   activate_skill: { color: "bg-rose-500", icon: SparklesIcon() as any }, // Handled specially below
   save_memory: { color: "bg-rose-400", icon: BrainCircuit },
 

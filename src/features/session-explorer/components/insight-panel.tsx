@@ -6,19 +6,17 @@ import { UsageTracker } from "./usage-tracker";
 import { ToolMonitor } from "./tool-monitor";
 import { MessageSquare, BarChart3, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getInsightTabs } from "@core/modules/ui-registry";
 
-type StaticTab = "chat" | "usage" | "tools";
+type Tab = "chat" | "usage" | "tools";
 
-const staticTabs: { id: StaticTab; label: string; icon: typeof MessageSquare }[] = [
+const TABS: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
   { id: "chat", label: "Sessions", icon: MessageSquare },
   { id: "usage", label: "Usage", icon: BarChart3 },
   { id: "tools", label: "Tool Monitor", icon: Wrench },
 ];
 
 export default function InsightPanel({ sessionId }: { sessionId: number | null }) {
-  const [activeTab, setActiveTab] = useState<string>("chat");
-  const dynamicTabs = getInsightTabs();
+  const [activeTab, setActiveTab] = useState<Tab>("chat");
 
   return (
     <div className="flex h-full flex-col">
@@ -27,25 +25,7 @@ export default function InsightPanel({ sessionId }: { sessionId: number | null }
         <span className="px-3 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
           Session Explorer
         </span>
-        {staticTabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors border-b-2",
-                activeTab === tab.id
-                  ? "border-[hsl(var(--primary))] text-[hsl(var(--foreground))]"
-                  : "border-transparent text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-              )}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {tab.label}
-            </button>
-          );
-        })}
-        {dynamicTabs.map((tab) => {
+        {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
@@ -70,11 +50,6 @@ export default function InsightPanel({ sessionId }: { sessionId: number | null }
         {activeTab === "chat" && <ChatViewer sessionId={sessionId} />}
         {activeTab === "usage" && <UsageTracker sessionId={sessionId} />}
         {activeTab === "tools" && <ToolMonitor sessionId={sessionId} />}
-        {dynamicTabs.map((tab) => {
-          if (activeTab !== tab.id) return null;
-          const Component = tab.component;
-          return <Component key={tab.id} sessionId={sessionId} />;
-        })}
       </div>
     </div>
   );

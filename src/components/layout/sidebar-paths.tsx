@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { Settings, Puzzle, FolderOpen, CheckCircle, XCircle } from "lucide-react";
+import { Settings, Puzzle, FolderOpen, CheckCircle, XCircle, Database } from "lucide-react";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -65,7 +65,15 @@ export function SidebarPaths() {
       </div>
 
       {/* Bottom actions */}
-      <div className="shrink-0 border-t border-[hsl(var(--border))] p-2">
+      <div className="shrink-0 border-t border-[hsl(var(--border))] p-2 flex flex-col gap-1">
+        <a
+          href="/modules/episodic-memory"
+          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-[hsl(var(--muted))] px-2 py-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]"
+          title="Memory Lab"
+        >
+          <Database className="h-3.5 w-3.5" />
+          Memory Lab
+        </a>
         <a
           href="/modules"
           className="flex w-full items-center justify-center gap-1.5 rounded-md bg-[hsl(var(--muted))] px-2 py-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]"
